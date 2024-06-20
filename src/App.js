@@ -28,17 +28,17 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 // Updated theme with new colors and font
 let theme = createTheme({
   typography: {
-    fontFamily: 'Roboto, sans-serif', // Changed font to Roboto
+    fontFamily: 'Roboto, sans-serif',
   },
   palette: {
     primary: {
-      main: '#2962FF', // Updated primary color
+      main: '#2962FF',
     },
     secondary: {
-      main: '#F50057', // Updated secondary color
+      main: '#F50057',
     },
     background: {
-      default: '#b0c4de', // Updated background color
+      default: '#b0c4de',
     },
   },
 });
@@ -46,10 +46,9 @@ let theme = createTheme({
 theme = responsiveFontSizes(theme);
 
 const LogContainer = styled(Box)(({ theme }) => ({
-  maxHeight: '400px', // Maximum height before scrolling is enabled
-  overflow: 'hidden', // Initially disable scrolling
-  overflowY: 'auto', // Make sure overflowY is set to 'auto' to enable scrolling
-
+  maxHeight: '400px',
+  overflow: 'hidden',
+  overflowY: 'auto',
 }));
 
 const AppContainer = styled(Container)(({ theme }) => ({
@@ -66,7 +65,6 @@ const FormSection = styled(Paper)(({ theme }) => ({
   marginBottom: theme.spacing(3),
   borderRadius: 8,
   backgroundColor: '#fff',
-  // Removed width: '100%' to allow for narrower input section
 }));
 
 const InputContainer = styled('div')(({ theme }) => ({
@@ -78,7 +76,7 @@ const SubmitButton = styled(Button)(({ theme }) => ({
   backgroundColor: theme.palette.primary.main,
   color: '#fff',
   '&:hover': {
-    backgroundColor: '#0039CB', // Updated hover color
+    backgroundColor: '#0039CB',
   },
 }));
 
@@ -87,7 +85,7 @@ const CancelButton = styled(Button)(({ theme }) => ({
   backgroundColor: theme.palette.secondary.main,
   color: '#fff',
   '&:hover': {
-    backgroundColor: '#C4002B', // Updated hover color
+    backgroundColor: '#C4002B',
   },
 }));
 
@@ -97,7 +95,7 @@ const ResultBox = styled(Paper)(({ theme }) => ({
   backgroundColor: '#ffffff',
   marginBottom: theme.spacing(2),
   marginTop: theme.spacing(5),
-  minHeight: 400, // Increased initial height for results
+  minHeight: 400,
 }));
 
 const LogBox = styled(Paper)(({ theme }) => ({
@@ -105,14 +103,14 @@ const LogBox = styled(Paper)(({ theme }) => ({
   borderRadius: 8,
   backgroundColor: '#ffffff',
   marginBottom: theme.spacing(2),
-  minHeight: 200, // Increased initial height for results
+  minHeight: 200,
 }));
 
 const UploadButton = styled(Button)(({ theme }) => ({
-  backgroundColor: '#00C853', // Updated button color
+  backgroundColor: '#00C853',
   color: '#fff',
   '&:hover': {
-    backgroundColor: '#009626', // Updated hover color
+    backgroundColor: '#009626',
   },
 }));
 
@@ -159,15 +157,13 @@ function App() {
   const [snackbarSeverity, setSnackbarSeverity] = useState('info');
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const cancelTokenSource = useRef(axios.CancelToken.source());
-  
-
 
   useEffect(() => {
     const logContainer = document.getElementById('log-container');
     if (logContainer.scrollHeight > logContainer.clientHeight) {
-      logContainer.style.overflowY = 'scroll'; // Enable scrolling if content overflows
+      logContainer.style.overflowY = 'scroll';
     }
-  }, [logs]); // Depend on logs so it runs every time logs update
+  }, [logs]);
 
   useEffect(() => {
     const eventSource = new EventSource(`${process.env.REACT_APP_BACKEND_URL}/stream`);
@@ -260,9 +256,9 @@ function App() {
       addLog('URL is required', 'warning');
       return;
     }
-    
+
     setLoading(true);
-    cancelTokenSource.current = axios.CancelToken.source(); // Reset token here
+    cancelTokenSource.current = axios.CancelToken.source();
     try {
       await axios.post(
         `${process.env.REACT_APP_BACKEND_URL}/process_url`,
@@ -548,24 +544,24 @@ function App() {
 
           {/* Logs Column - Now wider and taller */}
           <Grid item xs={12} md={6} lg={6} >
-        <LogBox style={{ height: '500px' }}>
-          <Typography variant="h6" gutterBottom>
-            Logs
-          </Typography>
-          <LogContainer id="log-container">
-            {logs.map((log, index) => (
-              <LogMessage key={index} logType={log.type}>
-                <LogIcon logType={log.type} />
-                <span style={{ marginLeft: 8 }}>{log.message}</span>
-              </LogMessage>
-            ))}
-          </LogContainer>
-        </LogBox>
+            <LogBox style={{ height: '500px' }}>
+              <Typography variant="h6" gutterBottom>
+                Logs
+              </Typography>
+              <LogContainer id="log-container">
+                {logs.map((log, index) => (
+                  <LogMessage key={index} logType={log.type}>
+                    <LogIcon logType={log.type} />
+                    <span style={{ marginLeft: 8 }}>{log.message}</span>
+                  </LogMessage>
+                ))}
+              </LogContainer>
+            </LogBox>
           </Grid>
         </Grid>
 
         {/* Results Section - Now smaller and centered */}
-        <Grid container justifyContent="center"> {/* Centered content */}
+        <Grid container justifyContent="center">
           <Grid item xs={12} md={8}>
             <ResultBox>
               <Typography variant="h6" gutterBottom>

@@ -24,6 +24,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import { io } from 'socket.io-client';
 
 // Updated theme with new colors and font
 let theme = createTheme({
@@ -49,7 +50,6 @@ const LogContainer = styled(Box)(({ theme }) => ({
   maxHeight: '400px', // Maximum height before scrolling is enabled
   overflow: 'hidden', // Initially disable scrolling
   overflowY: 'auto', // Make sure overflowY is set to 'auto' to enable scrolling
-
 }));
 
 const AppContainer = styled(Container)(({ theme }) => ({
@@ -159,8 +159,28 @@ function App() {
   const [snackbarSeverity, setSnackbarSeverity] = useState('info');
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const cancelTokenSource = useRef(axios.CancelToken.source());
-  
+  const socket = io(`${process.env.REACT_APP_BACKEND_URL}`, {
+    transports: ['websocket'] ,
+    withCredentials: true,
+    extraHeaders: {
+        "my-custom-header": "abcd"
+    }});
 
+  useEffect(() => {
+    socket.on('log_message', (log) => {
+      console.log(log);
+      if (typeof log === 'string') {
+        const logData = JSON.parse(log);
+        addLog(logData.message, logData.type);
+      } else {
+        addLog(log.message, log.type);
+      }
+    });
+
+    return () => {
+      socket.off('log_message');
+    };
+  }, []);
 
   useEffect(() => {
     const logContainer = document.getElementById('log-container');
@@ -168,17 +188,6 @@ function App() {
       logContainer.style.overflowY = 'scroll'; // Enable scrolling if content overflows
     }
   }, [logs]); // Depend on logs so it runs every time logs update
-
-  useEffect(() => {
-    const eventSource = new EventSource(`${process.env.REACT_APP_BACKEND_URL}/stream`);
-    eventSource.onmessage = (event) => {
-      const log = JSON.parse(event.data);
-      addLog(log.message, log.type);
-    };
-    return () => {
-      eventSource.close();
-    };
-  }, []);
 
   useEffect(() => {
     const handleBeforeUnload = (event) => {
@@ -260,7 +269,7 @@ function App() {
       addLog('URL is required', 'warning');
       return;
     }
-    
+
     setLoading(true);
     cancelTokenSource.current = axios.CancelToken.source(); // Reset token here
     try {
@@ -394,7 +403,7 @@ function App() {
 
         <Grid container spacing={3}>
           {/* Input Section - Now narrower and with spacing */}
-          <Grid item xs={12} md={6} lg={6} style={{ marginBottom: '2rem' }}> 
+          <Grid item xs={12} md={6} lg={6} style={{ marginBottom: '2rem' }}>
             <FormSection>
               <FormControl fullWidth>
                 <InputLabel htmlFor="process-type-select">Processing Type</InputLabel>
@@ -547,20 +556,20 @@ function App() {
           </Grid>
 
           {/* Logs Column - Now wider and taller */}
-          <Grid item xs={12} md={6} lg={6} >
-        <LogBox style={{ height: '500px' }}>
-          <Typography variant="h6" gutterBottom>
-            Logs
-          </Typography>
-          <LogContainer id="log-container">
-            {logs.map((log, index) => (
-              <LogMessage key={index} logType={log.type}>
-                <LogIcon logType={log.type} />
-                <span style={{ marginLeft: 8 }}>{log.message}</span>
-              </LogMessage>
-            ))}
-          </LogContainer>
-        </LogBox>
+          <Grid item xs={12} md={6} lg={6}>
+            <LogBox style={{ height: '500px' }}>
+              <Typography variant="h6" gutterBottom>
+                Logs
+              </Typography>
+              <LogContainer id="log-container">
+                {logs.map((log, index) => (
+                  <LogMessage key={index} logType={log.type}>
+                    <LogIcon logType={log.type} />
+                    <span style={{ marginLeft: 8 }}>{log.message}</span>
+                  </LogMessage>
+                ))}
+              </LogContainer>
+            </LogBox>
           </Grid>
         </Grid>
 

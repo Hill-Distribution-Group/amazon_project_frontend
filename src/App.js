@@ -25,6 +25,7 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { io } from 'socket.io-client';
+import { useMemo } from 'react';
 
 // Updated theme with new colors and font
 let theme = createTheme({
@@ -159,12 +160,13 @@ function App() {
   const [snackbarSeverity, setSnackbarSeverity] = useState('info');
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const cancelTokenSource = useRef(axios.CancelToken.source());
-  const socket = io(`${process.env.REACT_APP_BACKEND_URL}`, {
-    transports: ['websocket'] ,
+  const socket = useMemo(() => io(`${process.env.REACT_APP_BACKEND_URL}`, {
+    transports: ['websocket'],
     withCredentials: true,
     extraHeaders: {
-        "my-custom-header": "abcd"
-    }});
+      "my-custom-header": "abcd"
+    }
+  }), []); // Only re-create the socket if the URL changes, which normally wouldn't happen
 
   useEffect(() => {
     socket.on('log_message', (log) => {
@@ -176,11 +178,11 @@ function App() {
         addLog(log.message, log.type);
       }
     });
-
+  
     return () => {
       socket.off('log_message');
     };
-  }, []);
+  }, [socket]); // Include `socket` in the dependencies array
 
   useEffect(() => {
     const logContainer = document.getElementById('log-container');

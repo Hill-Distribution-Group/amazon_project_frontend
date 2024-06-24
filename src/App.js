@@ -464,7 +464,7 @@ function App() {
                     variant="outlined"
                     type="number"
                     InputProps={{
-                      startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                      startAdornment: <InputAdornment position="start">£</InputAdornment>,
                     }}
                   />
                   <FormControl fullWidth margin="normal" variant="outlined">

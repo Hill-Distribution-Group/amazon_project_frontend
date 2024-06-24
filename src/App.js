@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
 import {
   Container,
@@ -22,6 +22,9 @@ import {
   FormControlLabel,
   Radio,
   IconButton,
+  Tabs,
+  Tab,
+  Tooltip,
 } from '@mui/material';
 import { ThemeProvider, createTheme, responsiveFontSizes } from '@mui/material/styles';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -29,52 +32,62 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import DownloadIcon from '@mui/icons-material/Download';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import HistoryIcon from '@mui/icons-material/History';
 import { io } from 'socket.io-client';
-import { useMemo } from 'react';
 
 let theme = createTheme({
   typography: {
-    fontFamily: 'Roboto, sans-serif',
+    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+    h4: {
+      fontWeight: 700,
+    },
+    h6: {
+      fontWeight: 600,
+    },
   },
   palette: {
     primary: {
-      main: '#2962FF',
+      main: '#2196f3',
     },
     secondary: {
-      main: '#F50057',
+      main: '#ff9800',
     },
     background: {
-      default: '#b0c4de',
+      default: '#f4f6f8',
+    },
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: 'none',
+          borderRadius: 8,
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+        },
+      },
     },
   },
 });
 
 theme = responsiveFontSizes(theme);
 
-const LogContainer = styled(Box)(({ theme }) => ({
-  maxHeight: '400px',
-  overflow: 'hidden',
-  overflowY: 'auto',
-}));
-
 const AppContainer = styled(Container)(({ theme }) => ({
-  display: 'flex',
-  flexDirection: 'column',
   padding: theme.spacing(4),
   minHeight: '100vh',
   backgroundColor: theme.palette.background.default,
-  alignItems: 'center',
 }));
 
 const FormSection = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(3),
   marginBottom: theme.spacing(3),
-  borderRadius: 8,
-  backgroundColor: '#fff',
-}));
-
-const InputContainer = styled('div')(({ theme }) => ({
-  marginBottom: theme.spacing(2),
+  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
 }));
 
 const SubmitButton = styled(Button)(({ theme }) => ({
@@ -82,7 +95,7 @@ const SubmitButton = styled(Button)(({ theme }) => ({
   backgroundColor: theme.palette.primary.main,
   color: '#fff',
   '&:hover': {
-    backgroundColor: '#0039CB',
+    backgroundColor: theme.palette.primary.dark,
   },
 }));
 
@@ -91,35 +104,32 @@ const CancelButton = styled(Button)(({ theme }) => ({
   backgroundColor: theme.palette.secondary.main,
   color: '#fff',
   '&:hover': {
-    backgroundColor: '#C4002B',
+    backgroundColor: theme.palette.secondary.dark,
   },
-}));
-
-const ResultBox = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(2),
-  borderRadius: 8,
-  backgroundColor: '#ffffff',
-  marginBottom: theme.spacing(2),
-  marginTop: theme.spacing(5),
-  width: '100%',
-  minHeight: '400px',
-  overflow: 'auto',
 }));
 
 const LogBox = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(2),
-  borderRadius: 8,
-  backgroundColor: '#ffffff',
-  marginBottom: theme.spacing(2),
-  minHeight: 200,
+  height: '500px',
+  overflow: 'hidden',
+  display: 'flex',
+  flexDirection: 'column',
 }));
 
-const UploadButton = styled(Button)(({ theme }) => ({
-  backgroundColor: '#00C853',
-  color: '#fff',
-  '&:hover': {
-    backgroundColor: '#009626',
+const LogContainer = styled(Box)(({ theme }) => ({
+  flexGrow: 1,
+  overflowY: 'auto',
+  '&::-webkit-scrollbar': {
+    width: '0.4em'
   },
+  '&::-webkit-scrollbar-track': {
+    boxShadow: 'inset 0 0 6px rgba(0,0,0,0.00)',
+    webkitBoxShadow: 'inset 0 0 6px rgba(0,0,0,0.00)'
+  },
+  '&::-webkit-scrollbar-thumb': {
+    backgroundColor: 'rgba(0,0,0,.1)',
+    outline: '1px solid slategrey'
+  }
 }));
 
 const LogMessage = styled(Typography, {
@@ -151,6 +161,17 @@ const LogIcon = ({ logType }) => {
   }
 };
 
+const ResultBox = styled(Paper)(({ theme }) => ({
+  padding: theme.spacing(2),
+  marginTop: theme.spacing(3),
+  minHeight: '400px',
+  overflow: 'auto',
+  '& pre': {
+    whiteSpace: 'pre-wrap',
+    wordWrap: 'break-word',
+  },
+}));
+
 function App() {
   const [processType, setProcessType] = useState('url');
   const [inputType, setInputType] = useState('title');
@@ -166,6 +187,7 @@ function App() {
   const [snackbarSeverity, setSnackbarSeverity] = useState('info');
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [downloadLink, setDownloadLink] = useState('');
+  const [tabValue, setTabValue] = useState(0);
   const cancelTokenSource = useRef(axios.CancelToken.source());
   const socket = useMemo(() => io(`${process.env.REACT_APP_BACKEND_URL}`, {
     transports: ['websocket'],
@@ -173,7 +195,7 @@ function App() {
     extraHeaders: {
       "my-custom-header": "abcd"
     }
-  }), []); 
+  }), []);
 
   useEffect(() => {
     socket.on('log_message', (log) => {
@@ -189,14 +211,14 @@ function App() {
     return () => {
       socket.off('log_message');
     };
-  }, [socket]); 
+  }, [socket]);
 
   useEffect(() => {
     const logContainer = document.getElementById('log-container');
     if (logContainer.scrollHeight > logContainer.clientHeight) {
       logContainer.style.overflowY = 'scroll';
     }
-  }, [logs]); 
+  }, [logs]);
 
   useEffect(() => {
     const handleBeforeUnload = (event) => {
@@ -223,6 +245,11 @@ function App() {
       window.removeEventListener('unload', handleUnload);
     };
   }, [loading]);
+
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+    setProcessType(['url', 'text', 'image'][newValue]);
+  };
 
   const pollProcessingStatus = async () => {
     try {
@@ -281,118 +308,63 @@ function App() {
     }
   };
 
-  const handleUrlSubmit = async () => {
-    if (!url) {
-      addLog('URL is required', 'warning');
-      return;
-    }
-
+  const handleSubmit = async () => {
+    if (loading) return;
     setLoading(true);
-    setLogs([]);  // Clear logs
-    setResults(null);  // Clear results
+    setLogs([]);
+    setResults(null);
     cancelTokenSource.current = axios.CancelToken.source();
+  
     try {
-      await axios.post(
-        `${process.env.REACT_APP_BACKEND_URL}/process_url`,
-        { url },
-        {
-          cancelToken: cancelTokenSource.current.token,
-        }
-      );
+      switch (processType) {
+        case 'url':
+          await axios.post(
+            `${process.env.REACT_APP_BACKEND_URL}/process_url`,
+            { url },
+            { cancelToken: cancelTokenSource.current.token }
+          );
+          break;
+        case 'text':
+          await axios.post(
+            `${process.env.REACT_APP_BACKEND_URL}/process_text`,
+            { input_type: inputType, input_value: inputValue, cost_of_goods: costOfGoods, vat },
+            { cancelToken: cancelTokenSource.current.token }
+          );
+          break;
+        case 'image':
+          const formData = new FormData();
+          formData.append('image', image);
+          await axios.post(
+            `${process.env.REACT_APP_BACKEND_URL}/process_image`,
+            formData,
+            {
+              headers: { 'Content-Type': 'multipart/form-data' },
+              cancelToken: cancelTokenSource.current.token,
+            }
+          );
+          break;
+        default:
+          throw new Error('Invalid process type');
+      }
       pollProcessingStatus();
     } catch (error) {
-      handleError(error, 'processing URL');
+      handleError(error, `processing ${processType}`);
       setLoading(false);
     }
   };
+  
 
-  const handleTextSubmit = async () => {
-    if (!inputValue || !costOfGoods) {
-      addLog('All fields are required', 'warning');
-      return;
-    }
-
-    setLoading(true);
-    setLogs([]);  // Clear logs
-    setResults(null);  // Clear results
-    cancelTokenSource.current = axios.CancelToken.source();
-    try {
-      await axios.post(
-        `${process.env.REACT_APP_BACKEND_URL}/process_text`,
-        {
-          input_type: inputType,
-          input_value: inputValue,
-          cost_of_goods: costOfGoods,
-          vat,
-        },
-        {
-          cancelToken: cancelTokenSource.current.token,
-        }
-      );
-      pollProcessingStatus();
-    } catch (error) {
-      handleError(error, 'processing text');
-      setLoading(false);
-    }
-  };
-
-  const handleImageSubmit = async () => {
-    if (!image) {
-      addLog('Image is required', 'warning');
-      return;
-    }
-
-    setLoading(true);
-    setLogs([]);  // Clear logs
-    setResults(null);  // Clear results
-    cancelTokenSource.current = axios.CancelToken.source();
-    const formData = new FormData();
-    formData.append('image', image);
-    try {
-      const response = await axios.post(
-        `${process.env.REACT_APP_BACKEND_URL}/process_image`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          cancelToken: cancelTokenSource.current.token,
-        }
-      );
-      setResults(response.data);
-      addLog(`Processed Image: ${image.name}`, 'info');
-    } catch (error) {
-      handleError(error, 'processing image');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleStopRequest = async () => {
-    try {
-      await axios.post(
-        `${process.env.REACT_APP_BACKEND_URL}/stop_process`
-      );
-      addLog('Stop request sent successfully.', 'warning');
-    } catch (error) {
-      addLog(
-        `Error sending stop request: ${error.message}`,
-        'error'
-      );
-    }
-  };
-
-  const cancelRequest = () => {
+  const handleCancel = async () => {
     if (loading) {
-      cancelTokenSource.current.cancel(
-        'Operation canceled by the user.'
-      );
-      handleStopRequest();
+      cancelTokenSource.current.cancel('Operation canceled by the user.');
+      try {
+        await axios.post(`${process.env.REACT_APP_BACKEND_URL}/stop_process`);
+        addLog('Process stopped successfully', 'warning');
+      } catch (error) {
+        addLog(`Error stopping process: ${error.message}`, 'error');
+      }
+      setLoading(false);
     }
-  };
-
-  const handleSnackbarClose = () => {
-    setSnackbarOpen(false);
   };
 
   const addLog = (message, type = 'info', timestamp = new Date().toLocaleString()) => {
@@ -413,117 +385,91 @@ function App() {
     }
   };
 
+  const handleSnackbarClose = (event, reason) => {
+    if (reason === 'clickaway') {
+      return;
+    }
+    setSnackbarOpen(false);
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <AppContainer maxWidth="xl">
-        <Typography variant="h4" fontWeight="bold" gutterBottom align="center" style={{ marginBottom: '2rem' }}>
-          Amazon Product Matching
-        </Typography>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+          <Typography variant="h4">
+            Amazon Product Matching
+          </Typography>
+          <Box>
+            <Tooltip title="View Help">
+              <IconButton>
+                <HelpOutlineIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="View History">
+              <IconButton>
+                <HistoryIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
 
         <Grid container spacing={3}>
-          <Grid item xs={12} md={6} lg={6} style={{ marginBottom: '2rem' }}>
+          <Grid item xs={12} md={6}>
             <FormSection>
-              <FormControl fullWidth>
-                <InputLabel htmlFor="process-type-select">Processing Type</InputLabel>
-                <Select
-                  id="process-type-select"
-                  value={processType}
-                  onChange={(e) => setProcessType(e.target.value)}
-                  label="Processing Type"
-                  startAdornment={
-                    <InputAdornment position="start">
-                      <CloudUploadIcon />
-                    </InputAdornment>
-                  }
-                >
-                  <MenuItem value="url">Process URL</MenuItem>
-                  <MenuItem value="text">Process Text</MenuItem>
-                  <MenuItem value="image">Process Image</MenuItem>
-                </Select>
-              </FormControl>
-            </FormSection>
+              <Tabs value={tabValue} onChange={handleTabChange} centered>
+                <Tab label="URL" />
+                <Tab label="Text" />
+                <Tab label="Image" />
+              </Tabs>
 
-            {processType === 'url' && (
-              <FormSection>
-                <Typography variant="h6" gutterBottom>
-                  Process URL
-                </Typography>
-                <InputContainer>
+              {tabValue === 0 && (
+                <Box mt={3}>
                   <TextField
                     label="Enter Costco Catalog URL"
                     fullWidth
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                     required
+                    variant="outlined"
                   />
-                </InputContainer>
-                <SubmitButton
-                  variant="contained"
-                  fullWidth
-                  onClick={handleUrlSubmit}
-                  disabled={loading}
-                >
-                  {loading ? <CircularProgress size={24} /> : 'Submit'}
-                </SubmitButton>
-                <CancelButton
-                  variant="contained"
-                  fullWidth
-                  onClick={cancelRequest}
-                  disabled={!loading}
-                >
-                  Cancel Request
-                </CancelButton>
-              </FormSection>
-            )}
+                </Box>
+              )}
 
-            {processType === 'text' && (
-              <FormSection>
-                <Typography variant="h6" gutterBottom>
-                  Process Text
-                </Typography>
-                <InputContainer>
-                  <FormControl component="fieldset">
-                    <RadioGroup
-                      row
-                      value={inputType}
-                      onChange={(e) => setInputType(e.target.value)}
-                    >
-                      <FormControlLabel
-                        value="title"
-                        control={<Radio />}
-                        label="Product Title"
-                      />
-                      <FormControlLabel
-                        value="asin"
-                        control={<Radio />}
-                        label="ASIN"
-                      />
+              {tabValue === 1 && (
+                <Box mt={3}>
+                  <RadioGroup
+                    row
+                    value={inputType}
+                    onChange={(e) => setInputType(e.target.value)}
+                  >
+                    <FormControlLabel value="title" control={<Radio />} label="Product Title" />
+                    <FormControlLabel value="asin" control={<Radio />} label="ASIN" />
                     </RadioGroup>
-                  </FormControl>
-                </InputContainer>
-                <InputContainer>
                   <TextField
                     label={inputType === 'title' ? "Product Title" : "ASIN"}
                     fullWidth
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     required
+                    margin="normal"
+                    variant="outlined"
                   />
-                </InputContainer>
-                <InputContainer>
                   <TextField
                     label="Cost of Goods"
                     fullWidth
                     value={costOfGoods}
                     onChange={(e) => setCostOfGoods(e.target.value)}
                     required
+                    margin="normal"
+                    variant="outlined"
+                    type="number"
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                    }}
                   />
-                </InputContainer>
-                <InputContainer>
-                  <FormControl fullWidth>
-                    <InputLabel htmlFor="vat-select">VAT</InputLabel>
+                  <FormControl fullWidth margin="normal" variant="outlined">
+                    <InputLabel>VAT</InputLabel>
                     <Select
-                      id="vat-select"
                       value={vat}
                       onChange={(e) => setVat(e.target.value)}
                       label="VAT"
@@ -533,34 +479,13 @@ function App() {
                       <MenuItem value="0.167">16.7%</MenuItem>
                     </Select>
                   </FormControl>
-                </InputContainer>
-                <SubmitButton
-                  variant="contained"
-                  fullWidth
-                  onClick={handleTextSubmit}
-                  disabled={loading}
-                >
-                  {loading ? <CircularProgress size={24} /> : 'Submit'}
-                </SubmitButton>
-                <CancelButton
-                  variant="contained"
-                  fullWidth
-                  onClick={cancelRequest}
-                  disabled={!loading}
-                >
-                  Cancel Request
-                </CancelButton>
-              </FormSection>
-            )}
+                </Box>
+              )}
 
-            {processType === 'image' && (
-              <FormSection>
-                <Typography variant="h6" gutterBottom>
-                  Process Image
-                </Typography>
-                <InputContainer>
-                  <UploadButton
-                    variant="contained"
+              {tabValue === 2 && (
+                <Box mt={3}>
+                  <Button
+                    variant="outlined"
                     component="label"
                     fullWidth
                     startIcon={<CloudUploadIcon />}
@@ -572,35 +497,36 @@ function App() {
                       onChange={(e) => setImage(e.target.files[0])}
                       accept="image/*"
                     />
-                  </UploadButton>
+                  </Button>
                   {image && (
-                    <Typography variant="body2" color="textSecondary">
+                    <Typography variant="body2" color="textSecondary" mt={1}>
                       Selected file: {image.name}
                     </Typography>
                   )}
-                </InputContainer>
-                <SubmitButton
-                  variant="contained"
-                  fullWidth
-                  onClick={handleImageSubmit}
-                  disabled={loading || !image}
-                >
-                  {loading ? <CircularProgress size={24} /> : 'Submit'}
-                </SubmitButton>
-                <CancelButton
-                  variant="contained"
-                  fullWidth
-                  onClick={cancelRequest}
-                  disabled={!loading}
-                >
-                  Cancel Request
-                </CancelButton>
-              </FormSection>
-            )}
+                </Box>
+              )}
+
+              <SubmitButton
+                variant="contained"
+                fullWidth
+                onClick={handleSubmit}
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={24} /> : 'Submit'}
+              </SubmitButton>
+              <CancelButton
+                variant="contained"
+                fullWidth
+                onClick={handleCancel}
+                disabled={!loading}
+              >
+                Cancel Request
+              </CancelButton>
+            </FormSection>
           </Grid>
 
-          <Grid item xs={12} md={6} lg={6}>
-            <LogBox style={{ height: '500px' }}>
+          <Grid item xs={12} md={6}>
+            <LogBox>
               <Typography variant="h6" gutterBottom>
                 Logs
               </Typography>
@@ -608,7 +534,12 @@ function App() {
                 {logs.map((log, index) => (
                   <LogMessage key={index} logType={log.type}>
                     <LogIcon logType={log.type} />
-                    <span style={{ marginLeft: 8 }}>{log.timestamp} - {log.message}</span>
+                    <Box ml={1}>
+                      <Typography variant="caption" color="textSecondary">
+                        {log.timestamp}
+                      </Typography>
+                      <Typography variant="body2">{log.message}</Typography>
+                    </Box>
                   </LogMessage>
                 ))}
               </LogContainer>
@@ -616,33 +547,28 @@ function App() {
           </Grid>
         </Grid>
 
-        <Grid container justifyContent="center">
-          <Grid item xs={12} md={8}>
-            <ResultBox>
-              <Typography variant="h6" gutterBottom>
-                Results
-                {downloadLink && (
-                  <IconButton
-                    href={downloadLink}
-                    download={`result_${new Date().toISOString().replace(/[:.]/g, '-')}.json`}
-                    style={{ float: 'right' }}
-                  >
-                    <DownloadIcon />
-                  </IconButton>
-                )}
-              </Typography>
-              {loading && <LinearProgress />}
-              {results && <pre>{JSON.stringify(results, null, 2)}</pre>}
-            </ResultBox>
-          </Grid>
-        </Grid>
+        <ResultBox>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h6">Results</Typography>
+            {downloadLink && (
+              <IconButton
+                href={downloadLink}
+                download={`result_${new Date().toISOString().replace(/[:.]/g, '-')}.json`}
+              >
+                <DownloadIcon />
+              </IconButton>
+            )}
+          </Box>
+          {loading && <LinearProgress />}
+          {results && <pre>{JSON.stringify(results, null, 2)}</pre>}
+        </ResultBox>
 
         <Snackbar
           open={snackbarOpen}
           autoHideDuration={6000}
           onClose={handleSnackbarClose}
         >
-          <Alert onClose={handleSnackbarClose} severity={snackbarSeverity}>
+          <Alert onClose={handleSnackbarClose} severity={snackbarSeverity} elevation={6} variant="filled">
             {snackbarMessage}
           </Alert>
         </Snackbar>

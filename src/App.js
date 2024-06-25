@@ -35,6 +35,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import HistoryIcon from '@mui/icons-material/History';
 import { io } from 'socket.io-client';
+import ResultTable from './ResultTable';
 
 let theme = createTheme({
   typography: {
@@ -249,6 +250,7 @@ function App() {
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
     setProcessType(['url', 'text', 'image'][newValue]);
+    setResults(null); // Clear results when switching tabs
   };
 
   const pollProcessingStatus = async () => {
@@ -281,22 +283,14 @@ function App() {
       const resultResponse = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}/get_result`,
         {
-          responseType: processType === 'url' ? 'blob' : 'json',
+          responseType: 'json',
         }
       );
 
       if (processType === 'url') {
-        const downloadUrl = window.URL.createObjectURL(
-          new Blob([resultResponse.data])
-        );
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.setAttribute('download', `results_${new Date().toISOString().replace(/[:.]/g, '-')}.zip`);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
+        setResults(resultResponse.data);
         addLog(`Download successful`, 'success');
-      } else {
+      } else if (processType === 'text' || processType === 'image') {
         setResults(resultResponse.data);
         setDownloadLink(
           `${process.env.REACT_APP_BACKEND_URL}/get_result`
@@ -312,7 +306,7 @@ function App() {
     if (loading) return;
     setLoading(true);
     setLogs([]);
-    setResults(null);
+    setResults(null); // Clear results when starting a new request
     cancelTokenSource.current = axios.CancelToken.source();
   
     try {
@@ -352,7 +346,6 @@ function App() {
       setLoading(false);
     }
   };
-  
 
   const handleCancel = async () => {
     if (loading) {
@@ -560,7 +553,7 @@ function App() {
             )}
           </Box>
           {loading && <LinearProgress />}
-          {results && <pre>{JSON.stringify(results, null, 2)}</pre>}
+          {results && <ResultTable data={Array.isArray(results) ? results : [results]} />}
         </ResultBox>
 
         <Snackbar

@@ -1,14 +1,12 @@
-// File path: /src/components/ResultTable.jsx
-
 import React, { useState } from 'react';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow, 
-  Paper, 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
   Typography,
   Modal,
   Box,
@@ -20,6 +18,7 @@ import {
   FormControl,
   InputLabel
 } from '@mui/material';
+import OrderedJsonViewer from './OrderedJsonViewer';
 
 const truncateText = (text, maxLength) => {
   if (text.length > maxLength) {
@@ -230,7 +229,7 @@ const ResultTable = ({ data }) => {
             id="modal-modal-description"
             sx={{ marginTop: '16px', maxHeight: '80vh', overflow: 'auto' }}
           >
-            <pre>{JSON.stringify(selectedProduct, null, 2)}</pre>
+            <OrderedJsonViewer data={selectedProduct} />
           </Box>
         </Box>
       </Modal>

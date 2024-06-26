@@ -1,22 +1,35 @@
 import React from 'react';
-import { Typography, Box } from '@mui/material';
+import { Typography, Box,Paper, Table, TableBody, TableCell, TableContainer, TableRow } from '@mui/material';
 
 const OrderedJsonViewer = ({ data }) => {
-  const renderObject = (obj) => {
+  const renderObject = (obj, level = 0) => {
     return Object.entries(obj).map(([key, value]) => (
-      <Box key={key} sx={{ marginBottom: '8px' }}>
-        <Typography variant="body1">
-          <strong>{key}:</strong> {
-            typeof value === 'object' && value !== null
-              ? renderObject(value)
-              : value?.toString() || 'N/A'
-          }
-        </Typography>
-      </Box>
+      <TableRow key={key}>
+        <TableCell component="th" scope="row" sx={{ paddingLeft: `${level * 16}px`, fontWeight: 'bold' }}>
+          {key}
+        </TableCell>
+        <TableCell>
+          {typeof value === 'object' && value !== null ? (
+            <Box sx={{ marginLeft: '16px' }}>
+              {renderObject(value, level + 1)}
+            </Box>
+          ) : (
+            <Typography variant="body1">{value?.toString() || 'N/A'}</Typography>
+          )}
+        </TableCell>
+      </TableRow>
     ));
   };
 
-  return <Box>{renderObject(data)}</Box>;
+  return (
+    <TableContainer component={Paper} sx={{ padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
+      <Table>
+        <TableBody>
+          {renderObject(data)}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
 };
 
 export default OrderedJsonViewer;

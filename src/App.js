@@ -13,7 +13,6 @@ import {
   Select,
   FormControl,
   InputLabel,
-  styled,
   InputAdornment,
   LinearProgress,
   Snackbar,
@@ -36,6 +35,8 @@ import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import HistoryIcon from '@mui/icons-material/History';
 import { io } from 'socket.io-client';
 import ResultTable from './ResultTable';
+import { styled } from '@mui/system';
+
 
 let theme = createTheme({
   typography: {
@@ -133,7 +134,7 @@ const LogContainer = styled(Box)(({ theme }) => ({
   }
 }));
 
-const LogMessage = styled(Typography, {
+const LogMessage = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'logType',
 })(({ theme, logType }) => ({
   color:
@@ -289,16 +290,15 @@ function App() {
 
       if (processType === 'url') {
         setResults(resultResponse.data);
-        addLog(`Download successful`, 'success');
       } else if (processType === 'text' || processType === 'image') {
         setResults(resultResponse.data);
         setDownloadLink(
           `${process.env.REACT_APP_BACKEND_URL}/get_result`
         );
-        addLog(`Download successful`, 'success');
       }
     } catch (error) {
       addLog(`Error downloading results: ${error.message}`, 'error');
+      setResults([]);
     }
   };
 
@@ -351,6 +351,7 @@ function App() {
     if (loading) {
       cancelTokenSource.current.cancel('Operation canceled by the user.');
       try {
+        addLog('Cancelling process...', 'warning');
         await axios.post(`${process.env.REACT_APP_BACKEND_URL}/stop_process`);
         addLog('Process stopped successfully', 'warning');
       } catch (error) {
@@ -437,7 +438,7 @@ function App() {
                   >
                     <FormControlLabel value="title" control={<Radio />} label="Product Title" />
                     <FormControlLabel value="asin" control={<Radio />} label="ASIN" />
-                    </RadioGroup>
+                  </RadioGroup>
                   <TextField
                     label={inputType === 'title' ? "Product Title" : "ASIN"}
                     fullWidth
@@ -469,7 +470,7 @@ function App() {
                       required
                     >
                       <MenuItem value="0">0%</MenuItem>
-                      <MenuItem value="0.167">16.7%</MenuItem>
+                      <MenuItem value="0.2">20%</MenuItem>
                     </Select>
                   </FormControl>
                 </Box>
@@ -553,7 +554,7 @@ function App() {
             )}
           </Box>
           {loading && <LinearProgress />}
-          {results && <ResultTable data={Array.isArray(results) ? results : [results]} />}
+          {results && <ResultTable data={Array.isArray(results) ? results : [results]} setData={setResults} />}
         </ResultBox>
 
         <Snackbar

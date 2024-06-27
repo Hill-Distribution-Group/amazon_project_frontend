@@ -79,32 +79,55 @@ const ResultTable = ({ data, setData }) => {
     const expectedProfitFBANonRegistered = parseFloat(product["Expected Total Net Profit FBA Non Registered"]);
     const expectedProfitFBMNonRegistered = parseFloat(product["Expected Total Net Profit FBM Non Registered"]);
     const profitDifferenceThreshold = 0.1; // Example threshold of 10%
-
+  
+    let decision = "No Buy";
+    let highestMargin = 0;
+  
+    // Check registered options first
     if (!isNaN(marginFBA) && marginFBA > 9 && expectedProfitFBA > 0) {
+      if (marginFBA > highestMargin) {
+        highestMargin = marginFBA;
+        decision = "Buy (FBA-registered)";
+      }
       if (!isNaN(marginFBM) && marginFBM > 9 && expectedProfitFBM > 0) {
         const profitDifference = (expectedProfitFBM - expectedProfitFBA) / expectedProfitFBA;
-        if (profitDifference > profitDifferenceThreshold) {
-          return "Buy (FBM-registered)";
+        if (profitDifference > profitDifferenceThreshold && marginFBM > highestMargin) {
+          highestMargin = marginFBM;
+          decision = "Buy (FBM-registered)";
         }
       }
-      return "Buy (FBA-registered)";
     }
+  
     if (!isNaN(marginFBM) && marginFBM > 9 && expectedProfitFBM > 0) {
-      return "Buy (FBM-registered)";
+      if (marginFBM > highestMargin) {
+        highestMargin = marginFBM;
+        decision = "Buy (FBM-registered)";
+      }
     }
+  
+    // Check non-registered options
     if (!isNaN(marginFBANonRegistered) && marginFBANonRegistered > 9 && expectedProfitFBANonRegistered > 0) {
+      if (marginFBANonRegistered > highestMargin) {
+        highestMargin = marginFBANonRegistered;
+        decision = "Buy (FBA-non-registered)";
+      }
       if (!isNaN(marginFBMNonRegistered) && marginFBMNonRegistered > 9 && expectedProfitFBMNonRegistered > 0) {
         const profitDifferenceNonRegistered = (expectedProfitFBMNonRegistered - expectedProfitFBANonRegistered) / expectedProfitFBANonRegistered;
-        if (profitDifferenceNonRegistered > profitDifferenceThreshold) {
-          return "Buy (FBM-non-registered)";
+        if (profitDifferenceNonRegistered > profitDifferenceThreshold && marginFBMNonRegistered > highestMargin) {
+          highestMargin = marginFBMNonRegistered;
+          decision = "Buy (FBM-non-registered)";
         }
       }
-      return "Buy (FBA-non-registered)";
     }
+  
     if (!isNaN(marginFBMNonRegistered) && marginFBMNonRegistered > 9 && expectedProfitFBMNonRegistered > 0) {
-      return "Buy (FBM-non-registered)";
+      if (marginFBMNonRegistered > highestMargin) {
+        highestMargin = marginFBMNonRegistered;
+        decision = "Buy (FBM-non-registered)";
+      }
     }
-    return "No Buy";
+  
+    return decision;
   };
 
   const handleFilterChange = (event) => {

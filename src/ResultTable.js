@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Table,
   TableBody,
@@ -17,11 +17,15 @@ import {
   Select,
   FormControl,
   InputLabel,
-  IconButton
+  IconButton,
+  Button,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
-
 import OrderedJsonViewer from './OrderedJsonViewer';
+import ContextMenu from './ContextMenu';
+import api from './api';
 
 const truncateText = (text, maxLength) => {
   if (text && text.length > maxLength) {
@@ -41,10 +45,7 @@ const formatValue = (value) => {
   return value === 'N/A' ? '' : value;
 };
 
-const ResultTable = ({ data, setData }) => {
-  // Log to confirm props are received correctly
-  console.log('ResultTable props:', { data, setData });
-
+const ResultTable = ({ data, setData, onSaveSelected, isSavedResults = false, onRemoveSelected }) => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedProducts, setSelectedProducts] = useState({});
   const [filterText, setFilterText] = useState('');
@@ -53,6 +54,56 @@ const ResultTable = ({ data, setData }) => {
   const [commentModalOpen, setCommentModalOpen] = useState(false);
   const [currentComment, setCurrentComment] = useState('');
   const [commentProductIndex, setCommentProductIndex] = useState(null);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState('info');
+  const [contextMenu, setContextMenu] = useState({
+    mouseX: null,
+    mouseY: null,
+  });
+  const [selectedRowIndex, setSelectedRowIndex] = useState(null);
+
+  const handleContextMenu = (event, index) => {
+    event.preventDefault();
+    setContextMenu({
+      mouseX: event.clientX - 2,
+      mouseY: event.clientY - 4,
+    });
+    setSelectedRowIndex(index);
+  };
+
+  const handleCloseContextMenu = () => {
+    setContextMenu({ mouseX: null, mouseY: null });
+    setSelectedRowIndex(null);
+  };
+
+  const handleDecisionChange = async (newDecision) => {
+    if (selectedRowIndex !== null) {
+      const updatedProduct = { ...data[selectedRowIndex], decision: newDecision };
+      try {
+        await api.post('/update_decision', { ASIN: updatedProduct.ASIN, decision: newDecision });
+        const newData = [...data];
+        newData[selectedRowIndex] = updatedProduct;
+        setData(newData);
+        setSnackbarMessage('Decision updated successfully');
+        setSnackbarSeverity('success');
+        setSnackbarOpen(true);
+      } catch (error) {
+        console.error('Error updating decision:', error);
+        setSnackbarMessage('Failed to update decision');
+        setSnackbarSeverity('error');
+        setSnackbarOpen(true);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const dataWithDecision = data.map(product => ({
+      ...product,
+      decision: getDecision(product)
+    }));
+    setData(dataWithDecision);
+  }, [data, setData]);
 
   const handleRowClick = (product) => {
     setSelectedProduct(product);
@@ -69,6 +120,29 @@ const ResultTable = ({ data, setData }) => {
     }));
   };
 
+  const handleSaveSelected = async () => {
+    const selectedItems = data.filter(item => selectedProducts[item.ASIN]);
+    try {
+      const response = await onSaveSelected(selectedItems);
+      if (response.data.warnings.length > 0) {
+        setSnackbarMessage(response.data.warnings.join(', '));
+        setSnackbarSeverity('warning');
+        setSnackbarOpen(true);
+      }
+    } catch (error) {
+      setSnackbarMessage("Error saving selected items.");
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+    }
+    setSelectedProducts({});
+  };
+
+  const handleRemoveSelected = () => {
+    const selectedItems = data.filter(item => selectedProducts[item.ASIN]);
+    onRemoveSelected(selectedItems);
+    setSelectedProducts({});
+  };
+
   const getDecision = (product) => {
     const marginFBA = parseMargin(product["Margin FBA"]);
     const marginFBM = parseMargin(product["Margin FBM"]);
@@ -79,10 +153,10 @@ const ResultTable = ({ data, setData }) => {
     const expectedProfitFBANonRegistered = parseFloat(product["Expected Total Net Profit FBA Non Registered"]);
     const expectedProfitFBMNonRegistered = parseFloat(product["Expected Total Net Profit FBM Non Registered"]);
     const profitDifferenceThreshold = 0.1; // Example threshold of 10%
-  
+    
     let decision = "No Buy";
     let highestMargin = 0;
-  
+    
     // Check registered options first
     if (!isNaN(marginFBA) && marginFBA > 9 && expectedProfitFBA > 0) {
       if (marginFBA > highestMargin) {
@@ -97,14 +171,14 @@ const ResultTable = ({ data, setData }) => {
         }
       }
     }
-  
+    
     if (!isNaN(marginFBM) && marginFBM > 9 && expectedProfitFBM > 0) {
       if (marginFBM > highestMargin) {
         highestMargin = marginFBM;
         decision = "Buy (FBM-registered)";
       }
     }
-  
+    
     // Check non-registered options
     if (!isNaN(marginFBANonRegistered) && marginFBANonRegistered > 9 && expectedProfitFBANonRegistered > 0) {
       if (marginFBANonRegistered > highestMargin) {
@@ -119,14 +193,14 @@ const ResultTable = ({ data, setData }) => {
         }
       }
     }
-  
+    
     if (!isNaN(marginFBMNonRegistered) && marginFBMNonRegistered > 9 && expectedProfitFBMNonRegistered > 0) {
       if (marginFBMNonRegistered > highestMargin) {
         highestMargin = marginFBMNonRegistered;
         decision = "Buy (FBM-non-registered)";
       }
     }
-  
+    
     return decision;
   };
 
@@ -189,10 +263,6 @@ const ResultTable = ({ data, setData }) => {
     });
   }, [filteredData, sortField, sortDirection]);
 
-  if (!data || data.length === 0) {
-    return null;
-  }
-
   const columns = [
     "Costco Product Name",
     "Amazon Product Name",
@@ -213,8 +283,13 @@ const ResultTable = ({ data, setData }) => {
     "Expected Total Net Profit FBA Non Registered",
     "Expected Total Net Profit FBM Non Registered",
     "Is Sold by Amazon",
-    "Comment"
+    "Comment",
+    "Decision" // Update here to match column heading
   ];
+
+  if (!data || data.length === 0) {
+    return null;
+  }
 
   return (
     <>
@@ -254,7 +329,6 @@ const ResultTable = ({ data, setData }) => {
               {columns.map(column => (
                 <TableCell key={column}>{column}</TableCell>
               ))}
-              <TableCell>Margin Based Decision</TableCell>
               <TableCell align="center">Select</TableCell>
             </TableRow>
           </TableHead>
@@ -264,6 +338,7 @@ const ResultTable = ({ data, setData }) => {
                 hover 
                 key={index}
                 onClick={() => handleRowClick(product)}
+                onContextMenu={(e) => handleContextMenu(e, index)}
                 style={{ cursor: 'pointer' }}
               >
                 {columns.map(column => (
@@ -275,7 +350,9 @@ const ResultTable = ({ data, setData }) => {
                     ) : column.includes('Price') || column.includes('Profit') ? (
                       `£${formatValue(product[column])}`
                     ) : column === 'Matching Percentage' ? (
-                      `${formatValue(product[column])}%`
+                      <span style={{ color: parseFloat(product[column]) > 80 ? 'green' : 'orange' }}>
+                        {formatValue(product[column])}%
+                      </span>
                     ) : column === 'Comment' ? (
                       <Box display="flex" alignItems="center">
                         <Tooltip title={product[column] || 'No comment'}>
@@ -285,27 +362,63 @@ const ResultTable = ({ data, setData }) => {
                           <EditIcon fontSize="small" />
                         </IconButton>
                       </Box>
+                    ) : column === "Is Sold by Amazon" ? (
+                      <span>{product[column]}</span>
+                    ) : column === "Decision" ? (
+                      <span style={{ color: product.decision && product.decision.startsWith('No') ? 'red' : 'green' }}>
+                        {product.decision}
+                      </span>
                     ) : (
                       formatValue(product[column])
                     )}
                   </TableCell>
                 ))}
-                <TableCell sx={{ color: getDecision(product).startsWith('No') ? 'red' : 'green' }}>
-                  {getDecision(product)}
-                </TableCell>
                 <TableCell align="center">
                   <Checkbox
                     checked={!!selectedProducts[product["ASIN"]]}
                     onChange={() => handleCheckboxChange(product)}
-                    onClick={(e) => e.stopPropagation()} // Prevent row click
+                    onClick={(e) => e.stopPropagation()}
                   />
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
+          <ContextMenu
+        anchorPosition={
+          contextMenu.mouseY !== null && contextMenu.mouseX !== null
+            ? { top: contextMenu.mouseY, left: contextMenu.mouseX }
+            : undefined
+        }
+        isOpen={contextMenu.mouseY !== null}
+        onClose={handleCloseContextMenu}
+        onDecisionChange={handleDecisionChange}
+      />
+
         </Table>
       </TableContainer>
 
+      <Box mt={2}>
+        <Button 
+          variant="contained" 
+          color="primary" 
+          onClick={handleSaveSelected}
+          disabled={Object.values(selectedProducts).filter(Boolean).length === 0}
+        >
+          {isSavedResults ? 'Approve Selected Items' : 'Save Selected Items'}
+        </Button>
+        
+        {isSavedResults && (
+          <Button 
+            variant="contained" 
+            color="secondary" 
+            onClick={handleRemoveSelected}
+            disabled={Object.values(selectedProducts).filter(Boolean).length === 0}
+          >
+            Remove Selected Items
+          </Button>
+        )}
+      </Box>
+      
       <Modal
         open={!!selectedProduct}
         onClose={handleCloseModal}
@@ -372,6 +485,16 @@ const ResultTable = ({ data, setData }) => {
           </Box>
         </Box>
       </Modal>
+
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+      >
+        <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} elevation={6} variant="filled">
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </>
   );
 };

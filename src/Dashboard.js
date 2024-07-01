@@ -189,17 +189,17 @@ function Dashboard({ isLoggedIn, checkLoginStatus }) {
   const handleSaveSelected = async (selectedItems) => {
     try {
       const response = await api.post('/save_flagged', { items: selectedItems });
-      console.log('Save response:', response);  // Add this debug line
+      console.log('Save response:', response);  // Debug line
       
-      // Remove saved items from results
+      // Use a callback to ensure we're working with the most recent state
       setResults(prevResults => 
         prevResults.filter(item => !selectedItems.some(selectedItem => selectedItem.ASIN === item.ASIN))
       );
       
-      return response;  // Return the response for further processing in ResultTable
+      return response;
     } catch (error) {
       console.error('Error saving items:', error);
-      throw error;  // Throw the error to be caught in ResultTable
+      throw error;
     }
   };
 

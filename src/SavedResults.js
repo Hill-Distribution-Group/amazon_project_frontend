@@ -40,7 +40,7 @@ const SavedResults = () => {
       console.error('Error approving items:', error);
     }
   };
-
+  
   const handleRemoveSelected = async (selectedItems) => {
     try {
       await api.post('/remove_saved_items', { items: selectedItems });

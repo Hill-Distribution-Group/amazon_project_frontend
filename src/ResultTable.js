@@ -125,9 +125,8 @@ const ResultTable = ({ data, setData, onSaveSelected, isSavedResults = false, on
     try {
       await onSaveSelected(selectedItems);
       
-      // Remove saved items from the current data
-      const newData = data.filter(item => !selectedProducts[item.ASIN]);
-      setData(newData);
+      // Use a callback to ensure we're working with the most recent state
+      setData(prevData => prevData.filter(item => !selectedProducts[item.ASIN]));
       
       setSnackbarMessage("Selected items saved successfully.");
       setSnackbarSeverity('success');

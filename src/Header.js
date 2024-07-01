@@ -8,7 +8,7 @@ const Header = ({ isLoggedIn, onLogout }) => {
 
   const handleLogout = async () => {
     try {
-      await api.post('/logout'); // Use the api instance here
+      await api.post('/logout');
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       onLogout();
@@ -25,10 +25,10 @@ const Header = ({ isLoggedIn, onLogout }) => {
           HDG Data Warehouse
         </Typography>
         {isLoggedIn && (
-        <Button color="inherit" onClick={handleLogout}>
-          Logout
-        </Button>
-      )}
+          <Button color="inherit" onClick={handleLogout}>
+            Logout
+          </Button>
+        )}
       </Toolbar>
     </AppBar>
   );

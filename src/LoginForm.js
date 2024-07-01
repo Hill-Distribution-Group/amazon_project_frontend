@@ -1,4 +1,3 @@
-// src/LoginForm.js
 import React, { useState } from 'react';
 import { TextField, Button, Box, Typography } from '@mui/material';
 import api from './api'; // Import the configured Axios instance
@@ -15,22 +14,17 @@ const LoginForm = ({ onLoginSuccess }) => {
       const response = await api.post('/login', { username, password });
       if (response.data.message === 'Logged in successfully') {
         // Store tokens in localStorage
-        document.cookie = `authToken=${response.data.access_token}; path=/; Secure; SameSite=None`;
+        localStorage.setItem('access_token', response.data.access_token);
         localStorage.setItem('refresh_token', response.data.refresh_token);
         // Update the Authorization header for future requests
         api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
         onLoginSuccess();
       }
-      else{
-        console.log("hatalı giriş",response.data);
-      }
-      console.log("Grişşşşş",response.data)
     } catch (error) {
       console.error('Login error:', error);
       setError('Invalid username or password. Please try again.');
     }
   };
-
 
   return (
     <Box component="form" onSubmit={handleLogin}>

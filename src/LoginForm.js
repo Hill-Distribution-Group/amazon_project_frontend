@@ -12,17 +12,22 @@ const LoginForm = ({ onLoginSuccess }) => {
     e.preventDefault();
     setError('');
     try {
-      const response = await api.post('/login', { username, password }); // Use the api instance here
+      const response = await api.post('/login', { username, password });
       if (response.data.message === 'Logged in successfully') {
-        localStorage.setItem('access_token', response.data.access_token);
+        // Store tokens in localStorage
+        document.cookie = `authToken=${response.data.access_token}; path=/; Secure; SameSite=Strict`;
         localStorage.setItem('refresh_token', response.data.refresh_token);
+        // Update the Authorization header for future requests
+        api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
         onLoginSuccess();
       }
+      console.log("Grişşşşş",response.data)
     } catch (error) {
       console.error('Login error:', error);
       setError('Invalid username or password. Please try again.');
     }
   };
+
 
   return (
     <Box component="form" onSubmit={handleLogin}>

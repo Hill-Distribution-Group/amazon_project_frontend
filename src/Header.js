@@ -24,11 +24,11 @@ const Header = ({ isLoggedIn, onLogout }) => {
         <Typography variant="h6" style={{ flexGrow: 1 }}>
           HDG Data Warehouse
         </Typography>
-        {(
-          <Button color="inherit" onClick={handleLogout}>
-            Logout
-          </Button>
-        )}
+        {isLoggedIn && (
+        <Button color="inherit" onClick={handleLogout}>
+          Logout
+        </Button>
+      )}
       </Toolbar>
     </AppBar>
   );

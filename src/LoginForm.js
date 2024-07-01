@@ -21,6 +21,9 @@ const LoginForm = ({ onLoginSuccess }) => {
         api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
         onLoginSuccess();
       }
+      else{
+        console.log("hatalı giriş",response.data);
+      }
       console.log("Grişşşşş",response.data)
     } catch (error) {
       console.error('Login error:', error);

@@ -18,11 +18,13 @@ const SavedResults = () => {
 
   const fetchSavedItems = async () => {
     try {
+      console.log('Fetching saved items...');  // Add this debug line
       const response = await api.get('/get_saved_results');
+      console.log('Received response:', response.data);  // Add this debug line
       setSavedItems(response.data);
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching saved items:', error);
+      console.error('Error fetching saved items:', error.response ? error.response.data : error);
       setError('Failed to load saved items. Please try again later.');
       setLoading(false);
     }

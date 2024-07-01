@@ -15,7 +15,7 @@ const LoginForm = ({ onLoginSuccess }) => {
       const response = await api.post('/login', { username, password });
       if (response.data.message === 'Logged in successfully') {
         // Store tokens in localStorage
-        document.cookie = `authToken=${response.data.access_token}; path=/; Secure; SameSite=Strict`;
+        document.cookie = `authToken=${response.data.access_token}; path=/; Secure; SameSite=None`;
         localStorage.setItem('refresh_token', response.data.refresh_token);
         // Update the Authorization header for future requests
         api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;

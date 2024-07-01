@@ -18,13 +18,13 @@ const LoginForm = ({ onLoginSuccess }) => {
         localStorage.setItem('refresh_token', response.data.refresh_token);
         // Update the Authorization header for future requests
         api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
-        console.log('Login Success - Access Token:', response.data.access_token);
+        console.log('Login Success - Access Token:', response.data.access_token);  // Debugging
         onLoginSuccess();
       } else {
-        console.error('Login error: Invalid response', response.data);
+        console.error('Login error: Invalid response', response.data);  // Debugging
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Login error:', error);  // Debugging
       setError('Invalid username or password. Please try again.');
     }
   };

@@ -1,10 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Typography,
   Box,
   CircularProgress,
-  Snackbar,
-  Alert
 } from '@mui/material';
 import ResultTable from './ResultTable';
 import api from './api';
@@ -13,54 +11,46 @@ const SavedResults = () => {
   const [savedItems, setSavedItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
-
-  const fetchSavedItems = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await api.get('/get_saved_results');
-      setSavedItems(response.data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching saved items:', error);
-      setError('Failed to load saved items. Please try again later.');
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
     fetchSavedItems();
-  }, [fetchSavedItems]);
+  }, []);
 
-  const handleApproveSelected = async (selectedItems) => {
+  const fetchSavedItems = async () => {
     try {
-      await api.post('/approve_items', { items: selectedItems });
-      setSavedItems(prevItems => 
-        prevItems.filter(item => !selectedItems.some(selectedItem => selectedItem.ASIN === item.ASIN))
-      );
-      setSnackbar({ open: true, message: 'Items approved successfully', severity: 'success' });
+      console.log('Fetching saved items...');  // Add this debug line
+      const response = await api.get('/get_saved_results');
+      console.log('Received response:', response.data);  // Add this debug line
+      setSavedItems(response.data);
+      setLoading(false);
     } catch (error) {
-      console.error('Error approving items:', error);
-      setSnackbar({ open: true, message: 'Failed to approve items', severity: 'error' });
-    }
-  };
-  
-  const handleRemoveSelected = async (selectedItems) => {
-    try {
-      await api.post('/remove_saved_items', { items: selectedItems });
-      setSavedItems(prevItems => 
-        prevItems.filter(item => !selectedItems.some(selectedItem => selectedItem.ASIN === item.ASIN))
-      );
-      setSnackbar({ open: true, message: 'Items removed successfully', severity: 'success' });
-    } catch (error) {
-      console.error('Error removing items:', error);
-      setSnackbar({ open: true, message: 'Failed to remove items', severity: 'error' });
+      console.error('Error fetching saved items:', error.response ? error.response.data : error);
+      setError('Failed to load saved items. Please try again later.');
+      setLoading(false);
     }
   };
 
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
-  };
+const handleApproveSelected = async (selectedItems) => {
+  try {
+    await api.post('/approve_items', { items: selectedItems });
+    setSavedItems(prevItems => 
+      prevItems.filter(item => !selectedItems.some(selectedItem => selectedItem.ASIN === item.ASIN))
+    );
+  } catch (error) {
+    console.error('Error approving items:', error);
+  }
+};
+
+const handleRemoveSelected = async (selectedItems) => {
+  try {
+    await api.post('/remove_saved_items', { items: selectedItems });
+    setSavedItems(prevItems => 
+      prevItems.filter(item => !selectedItems.some(selectedItem => selectedItem.ASIN === item.ASIN))
+    );
+  } catch (error) {
+    console.error('Error removing items:', error);
+  }
+};
 
   if (loading) {
     return (
@@ -96,11 +86,6 @@ const SavedResults = () => {
       ) : (
         <Typography variant="body1">No saved items found.</Typography>
       )}
-      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} elevation={6} variant="filled">
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 };

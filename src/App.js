@@ -11,7 +11,6 @@ import backgroundImage from './assets/pexels-tiger-lily-4483775.jpg';
 import logo from './assets/hdg-logo.jpeg';
 import api from './api'; // Import the configured Axios instance
 import SavedResults from './SavedResults';
-import { QueryClient, QueryClientProvider } from 'react-query';
 
 let theme = createTheme({
   typography: {
@@ -57,7 +56,6 @@ export const ContentOverlay = styled(Box)(({ theme }) => ({
   position: 'absolute',
 }));
 
-const queryClient = new QueryClient();
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -83,8 +81,6 @@ function App() {
   };
 
   return (
-    <QueryClientProvider client={queryClient}>
-
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Header isLoggedIn={isLoggedIn} onLogout={() => {
@@ -128,7 +124,6 @@ function App() {
       </AppContainer>
       <Footer />
     </ThemeProvider>
-    </QueryClientProvider>
   );
 }
 

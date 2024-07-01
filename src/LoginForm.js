@@ -18,7 +18,10 @@ const LoginForm = ({ onLoginSuccess }) => {
         localStorage.setItem('refresh_token', response.data.refresh_token);
         // Update the Authorization header for future requests
         api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
+        console.log('Login Success - Access Token:', response.data.access_token);
         onLoginSuccess();
+      } else {
+        console.error('Login error: Invalid response', response.data);
       }
     } catch (error) {
       console.error('Login error:', error);

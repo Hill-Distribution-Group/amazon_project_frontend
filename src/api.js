@@ -37,6 +37,7 @@ api.interceptors.response.use(
         console.log('Token refreshed - New Token:', token);  // Debugging
         localStorage.setItem('access_token', token);
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        originalRequest.headers['Authorization'] = `Bearer ${token}`;
         return api(originalRequest);
       } catch (refreshError) {
         console.error('Refresh Token Error:', refreshError);  // Debugging

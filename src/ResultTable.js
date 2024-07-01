@@ -123,18 +123,24 @@ const ResultTable = ({ data, setData, onSaveSelected, isSavedResults = false, on
   const handleSaveSelected = async () => {
     const selectedItems = data.filter(item => selectedProducts[item.ASIN]);
     try {
-      const response = await onSaveSelected(selectedItems);
-      if (response.data.warnings.length > 0) {
-        setSnackbarMessage(response.data.warnings.join(', '));
-        setSnackbarSeverity('warning');
-        setSnackbarOpen(true);
-      }
+      await onSaveSelected(selectedItems);
+      
+      // Remove saved items from the current data
+      const newData = data.filter(item => !selectedProducts[item.ASIN]);
+      setData(newData);
+      
+      setSnackbarMessage("Selected items saved successfully.");
+      setSnackbarSeverity('success');
+      setSnackbarOpen(true);
+      
+      // Clear selected products
+      setSelectedProducts({});
     } catch (error) {
-      setSnackbarMessage("Error saving selected items.");
+      console.error('Error saving selected items:', error);
+      setSnackbarMessage("Error saving selected items. Please try again.");
       setSnackbarSeverity('error');
       setSnackbarOpen(true);
     }
-    setSelectedProducts({});
   };
 
   const handleRemoveSelected = () => {

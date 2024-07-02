@@ -18,10 +18,22 @@ const Header = ({ isLoggedIn, onLogout }) => {
     }
   };
 
+  const handleTitleClick = () => {
+    if (isLoggedIn) {
+      navigate('/dashboard');
+    } else {
+      navigate('/');
+    }
+  };
+
   return (
     <AppBar position="static">
       <Toolbar>
-        <Typography variant="h6" style={{ flexGrow: 1 }}>
+        <Typography 
+          variant="h6" 
+          style={{ flexGrow: 1, cursor: 'pointer' }} 
+          onClick={handleTitleClick}
+        >
           HDG Data Warehouse
         </Typography>
         {isLoggedIn && (

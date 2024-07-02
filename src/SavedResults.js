@@ -30,28 +30,36 @@ const SavedResults = () => {
     }
   };
 
-const handleApproveSelected = async (selectedItems) => {
-  try {
-    await api.post('/approve_items', { items: selectedItems });
-    setSavedItems(prevItems => 
-      prevItems.filter(item => !selectedItems.some(selectedItem => selectedItem.ASIN === item.ASIN))
-    );
-  } catch (error) {
-    console.error('Error approving items:', error);
-  }
-};
-
-const handleRemoveSelected = async (selectedItems) => {
-  try {
-    await api.post('/remove_saved_items', { items: selectedItems });
-    setSavedItems(prevItems => 
-      prevItems.filter(item => !selectedItems.some(selectedItem => selectedItem.ASIN === item.ASIN))
-    );
-  } catch (error) {
-    console.error('Error removing items:', error);
-  }
-};
-
+  const handleApproveSelected = async (selectedItems) => {
+    try {
+      await api.post('/approve_items', { items: selectedItems });
+      fetchSavedItems();  // Refresh the data
+    } catch (error) {
+      console.error('Error approving items:', error);
+    }
+  };
+  
+  const handleDecisionUpdate = async (updatedItem) => {
+    try {
+      await api.post('/update_decision', { ASIN: updatedItem.ASIN, decision: updatedItem.Decision });
+      setSavedItems(prevItems => 
+        prevItems.map(item => 
+          item.ASIN === updatedItem.ASIN ? { ...item, Decision: updatedItem.Decision } : item
+        )
+      );
+      console.log('Decision updated:', updatedItem);
+    } catch (error) {
+      console.error('Error updating decision:', error);
+    }
+  };
+  const handleRemoveSelected = async (selectedItems) => {
+    try {
+      await api.post('/remove_saved_items', { items: selectedItems });
+      fetchSavedItems();  // Refresh the data
+    } catch (error) {
+      console.error('Error removing items:', error);
+    }
+  };
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
@@ -81,6 +89,7 @@ const handleRemoveSelected = async (selectedItems) => {
           setData={setSavedItems}
           onSaveSelected={handleApproveSelected}
           onRemoveSelected={handleRemoveSelected}
+          onDecisionUpdate={handleDecisionUpdate} 
           isSavedResults={true}
         />
       ) : (

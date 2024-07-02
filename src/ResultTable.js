@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -25,7 +25,6 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import OrderedJsonViewer from './OrderedJsonViewer';
 import ContextMenu from './ContextMenu';
-import api from './api';
 
 const truncateText = (text, maxLength) => {
   if (text && text.length > maxLength) {
@@ -34,18 +33,11 @@ const truncateText = (text, maxLength) => {
   return text || '';
 };
 
-const parseMargin = (marginStr) => {
-  if (typeof marginStr === 'string' && marginStr.includes('%')) {
-    return parseFloat(marginStr.replace('%', ''));
-  }
-  return parseFloat(marginStr);
-};
-
 const formatValue = (value) => {
   return value === 'N/A' ? '' : value;
 };
 
-const ResultTable = ({ data, setData, onSaveSelected, isSavedResults = false, onRemoveSelected }) => {
+const ResultTable = ({ data, setData, onSaveSelected, isSavedResults = false, onRemoveSelected,onDecisionUpdate  }) => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedProducts, setSelectedProducts] = useState({});
   const [filterText, setFilterText] = useState('');
@@ -79,12 +71,32 @@ const ResultTable = ({ data, setData, onSaveSelected, isSavedResults = false, on
 
   const handleDecisionChange = async (newDecision) => {
     if (selectedRowIndex !== null) {
-      const updatedProduct = { ...data[selectedRowIndex], decision: newDecision };
       try {
-        await api.post('/update_decision', { ASIN: updatedProduct.ASIN, decision: newDecision });
-        const newData = [...data];
-        newData[selectedRowIndex] = updatedProduct;
-        setData(newData);
+        const updatedItem = { ...data[selectedRowIndex], Decision: newDecision };
+        
+        if (onDecisionUpdate) {
+          // For saved items
+          await onDecisionUpdate(updatedItem);
+        } else {
+          // For unsaved items (in Dashboard)
+          setData(prevData => {
+            if (!Array.isArray(prevData)) {
+              console.error('prevData is not an array:', prevData);
+              return [updatedItem];
+            }
+            const newData = [...prevData];
+            newData[selectedRowIndex] = updatedItem;
+            return newData;
+          });
+        }
+        
+        // Update local state
+        setData(prevData => {
+          const newData = [...prevData];
+          newData[selectedRowIndex] = updatedItem;
+          return newData;
+        });
+  
         setSnackbarMessage('Decision updated successfully');
         setSnackbarSeverity('success');
         setSnackbarOpen(true);
@@ -95,15 +107,9 @@ const ResultTable = ({ data, setData, onSaveSelected, isSavedResults = false, on
         setSnackbarOpen(true);
       }
     }
+    handleCloseContextMenu();
   };
 
-  useEffect(() => {
-    const dataWithDecision = data.map(product => ({
-      ...product,
-      decision: getDecision(product)
-    }));
-    setData(dataWithDecision);
-  }, [data, setData]);
 
   const handleRowClick = (product) => {
     setSelectedProduct(product);
@@ -148,66 +154,6 @@ const ResultTable = ({ data, setData, onSaveSelected, isSavedResults = false, on
     setSelectedProducts({});
   };
 
-  const getDecision = (product) => {
-    const marginFBA = parseMargin(product["Margin FBA"]);
-    const marginFBM = parseMargin(product["Margin FBM"]);
-    const marginFBANonRegistered = parseMargin(product["Margin FBA Non Registered"]);
-    const marginFBMNonRegistered = parseMargin(product["Margin FBM Non Registered"]);
-    const expectedProfitFBA = parseFloat(product["Expected Total Net Profit FBA"]);
-    const expectedProfitFBM = parseFloat(product["Expected Total Net Profit FBM"]);
-    const expectedProfitFBANonRegistered = parseFloat(product["Expected Total Net Profit FBA Non Registered"]);
-    const expectedProfitFBMNonRegistered = parseFloat(product["Expected Total Net Profit FBM Non Registered"]);
-    const profitDifferenceThreshold = 0.1; // Example threshold of 10%
-    
-    let decision = "No Buy";
-    let highestMargin = 0;
-    
-    // Check registered options first
-    if (!isNaN(marginFBA) && marginFBA > 9 && expectedProfitFBA > 0) {
-      if (marginFBA > highestMargin) {
-        highestMargin = marginFBA;
-        decision = "Buy (FBA-registered)";
-      }
-      if (!isNaN(marginFBM) && marginFBM > 9 && expectedProfitFBM > 0) {
-        const profitDifference = (expectedProfitFBM - expectedProfitFBA) / expectedProfitFBA;
-        if (profitDifference > profitDifferenceThreshold && marginFBM > highestMargin) {
-          highestMargin = marginFBM;
-          decision = "Buy (FBM-registered)";
-        }
-      }
-    }
-    
-    if (!isNaN(marginFBM) && marginFBM > 9 && expectedProfitFBM > 0) {
-      if (marginFBM > highestMargin) {
-        highestMargin = marginFBM;
-        decision = "Buy (FBM-registered)";
-      }
-    }
-    
-    // Check non-registered options
-    if (!isNaN(marginFBANonRegistered) && marginFBANonRegistered > 9 && expectedProfitFBANonRegistered > 0) {
-      if (marginFBANonRegistered > highestMargin) {
-        highestMargin = marginFBANonRegistered;
-        decision = "Buy (FBA-non-registered)";
-      }
-      if (!isNaN(marginFBMNonRegistered) && marginFBMNonRegistered > 9 && expectedProfitFBMNonRegistered > 0) {
-        const profitDifferenceNonRegistered = (expectedProfitFBMNonRegistered - expectedProfitFBANonRegistered) / expectedProfitFBANonRegistered;
-        if (profitDifferenceNonRegistered > profitDifferenceThreshold && marginFBMNonRegistered > highestMargin) {
-          highestMargin = marginFBMNonRegistered;
-          decision = "Buy (FBM-non-registered)";
-        }
-      }
-    }
-    
-    if (!isNaN(marginFBMNonRegistered) && marginFBMNonRegistered > 9 && expectedProfitFBMNonRegistered > 0) {
-      if (marginFBMNonRegistered > highestMargin) {
-        highestMargin = marginFBMNonRegistered;
-        decision = "Buy (FBM-non-registered)";
-      }
-    }
-    
-    return decision;
-  };
 
   const handleFilterChange = (event) => {
     setFilterText(event.target.value);
@@ -370,8 +316,8 @@ const ResultTable = ({ data, setData, onSaveSelected, isSavedResults = false, on
                     ) : column === "Is Sold by Amazon" ? (
                       <span>{product[column]}</span>
                     ) : column === "Decision" ? (
-                      <span style={{ color: product.decision && product.decision.startsWith('No') ? 'red' : 'green' }}>
-                        {product.decision}
+                      <span style={{ color: product.Decision && product.Decision.startsWith('No') ? 'red' : 'green' }}>
+                        {product.Decision}
                       </span>
                     ) : (
                       formatValue(product[column])

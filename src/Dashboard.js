@@ -192,9 +192,13 @@ function Dashboard({ isLoggedIn, checkLoginStatus }) {
       console.log('Save response:', response);  // Debug line
       
       // Use a callback to ensure we're working with the most recent state
-      setResults(prevResults => 
-        prevResults.filter(item => !selectedItems.some(selectedItem => selectedItem.ASIN === item.ASIN))
-      );
+      setResults(prevResults => {
+        if (!Array.isArray(prevResults)) {
+          console.error('prevResults is not an array:', prevResults);
+          return []; // or return some default value
+        }
+        return prevResults.filter(item => !selectedItems.some(selectedItem => selectedItem.ASIN === item.ASIN));
+      });
       
       return response;
     } catch (error) {
@@ -279,16 +283,24 @@ function Dashboard({ isLoggedIn, checkLoginStatus }) {
 
   const handleDownloadResult = async () => {
     try {
-      const resultResponse = await api.get(
-        '/get_result',
-        { responseType: 'json' }
-      );
-
-      setResults(resultResponse.data);
+      const resultResponse = await api.get('/get_result', { responseType: 'json' });
+      setResults(Array.isArray(resultResponse.data) ? resultResponse.data : [resultResponse.data]);
     } catch (error) {
       addLog(`Error downloading results: ${error.message}`, 'error');
       setResults([]);
     }
+  };
+
+  const handleDashboardDecisionUpdate = (updatedItem) => {
+    setResults(prevResults => {
+      if (!Array.isArray(prevResults)) {
+        console.error('prevResults is not an array:', prevResults);
+        return [updatedItem];
+      }
+      return prevResults.map(item => 
+        item.ASIN === updatedItem.ASIN ? { ...item, Decision: updatedItem.Decision } : item
+      );
+    });
   };
 
   const handleSubmit = async () => {
@@ -538,7 +550,15 @@ function Dashboard({ isLoggedIn, checkLoginStatus }) {
         <ResultBox>
           <Typography variant="h6">Results</Typography>
           {loading && <LinearProgress />}
-          {results && <ResultTable data={Array.isArray(results) ? results : [results]} setData={setResults} onSaveSelected={handleSaveSelected} isSavedResults={false} />}
+          {results && (
+  <ResultTable 
+    data={results} 
+    setData={setResults}
+    onSaveSelected={handleSaveSelected}
+    onDecisionUpdate={handleDashboardDecisionUpdate}
+    isSavedResults={false}
+  />
+)}
         </ResultBox>
 
         <Snackbar

@@ -29,8 +29,6 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
-import HistoryIcon from '@mui/icons-material/History';
 import { io } from 'socket.io-client';
 import ResultTable from './ResultTable';
 import { styled } from '@mui/system';
@@ -186,26 +184,25 @@ function Dashboard({ isLoggedIn, checkLoginStatus }) {
     checkLoginStatus();
   }, [checkLoginStatus]);
 
-  const handleSaveSelected = async (selectedItems) => {
-    try {
-      const response = await api.post('/save_flagged', { items: selectedItems });
-      console.log('Save response:', response);  // Debug line
-      
-      // Use a callback to ensure we're working with the most recent state
-      setResults(prevResults => {
-        if (!Array.isArray(prevResults)) {
-          console.error('prevResults is not an array:', prevResults);
-          return []; // or return some default value
-        }
-        return prevResults.filter(item => !selectedItems.some(selectedItem => selectedItem.ASIN === item.ASIN));
-      });
-      
-      return response;
-    } catch (error) {
-      console.error('Error saving items:', error);
-      throw error;
-    }
-  };
+const handleSaveSelected = async (selectedItems) => {
+  try {
+    const response = await api.post('/save_flagged', { items: selectedItems });
+    console.log('Save response:', response);
+    
+    setResults(prevResults => {
+      if (!Array.isArray(prevResults)) {
+        console.error('prevResults is not an array:', prevResults);
+        return [];
+      }
+      return prevResults.filter(item => !selectedItems.some(selectedItem => selectedItem.ASIN === item.ASIN));
+    });
+    
+    return response;
+  } catch (error) {
+    console.error('Error saving items:', error);
+    throw error;
+  }
+};
 
   useEffect(() => {
     socket.on('log_message', (log) => {
@@ -395,16 +392,6 @@ function Dashboard({ isLoggedIn, checkLoginStatus }) {
             Amazon Product Matching
           </Typography>
           <Box>
-            <Tooltip title="View Help">
-              <IconButton>
-                <HelpOutlineIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="View History">
-              <IconButton>
-                <HistoryIcon />
-              </IconButton>
-            </Tooltip>
             <Tooltip title="View Saved Results">
               <IconButton onClick={() => navigate('/saved-results')}>
                 <SaveIcon />

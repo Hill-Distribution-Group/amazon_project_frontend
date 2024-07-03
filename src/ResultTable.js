@@ -37,7 +37,7 @@ const formatValue = (value) => {
   return value === 'N/A' ? '' : value;
 };
 
-const ResultTable = ({ data, setData, onSaveSelected, isSavedResults = false, onRemoveSelected,onDecisionUpdate  }) => {
+const ResultTable = ({ data, setData, onSaveSelected, isSavedResults = false, isToProcure=false, onRemoveSelected,onDecisionUpdate  }) => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedProducts, setSelectedProducts] = useState({});
   const [filterText, setFilterText] = useState('');
@@ -214,29 +214,67 @@ const ResultTable = ({ data, setData, onSaveSelected, isSavedResults = false, on
     });
   }, [filteredData, sortField, sortDirection]);
 
-  const columns = [
-    "Costco Product Name",
-    "Amazon Product Name",
-    "ASIN",
-    "Matching Percentage",
-    "Sales Volume",
-    "Expected Sales Volume",
-    "Buy Box Price",
-    "Cheapest FBA Price",
-    "Cheapest FBM Price",
-    "Cheapest FBM Prime Price",
-    "Margin FBA",
-    "Margin FBM",
-    "Margin FBA Non Registered",
-    "Margin FBM Non Registered",
-    "Expected Total Net Profit FBA",
-    "Expected Total Net Profit FBM",
-    "Expected Total Net Profit FBA Non Registered",
-    "Expected Total Net Profit FBM Non Registered",
-    "Is Sold by Amazon",
-    "Comment",
-    "Decision" // Update here to match column heading
-  ];
+    const getColumns = () => {
+      if (isToProcure) {
+        return [
+          "SKU",
+          "ASIN",
+          "Product Name",
+          "Expected Units",
+          "Purchase Price",
+          "Selling Price",
+          "VAT Rate",
+          "Counter Party",
+          "Fulfillment Channel",
+          "Extra Packing Needed",
+          "Can List",
+          "Sell By Days",
+          "Units Per Pallet",
+          "Status",
+          "Description"
+        ];
+      } else if (isSavedResults) {
+        return [
+          "ASIN",
+          "Costco Product Name",
+          "Amazon Product Name",
+          "Matching Percentage",
+          "Sales Volume",
+          "Expected Sales Volume",
+          "Buy Box Price",
+          "Cheapest FBA Price",
+          "Cheapest FBM Price",
+          "Margin FBA",
+          "Margin FBM",
+          "Expected Total Net Profit FBA",
+          "Expected Total Net Profit FBM",
+          "Is Sold by Amazon",
+          "Comment",
+          "Decision"
+        ];
+      } else {
+        // Default columns for initial results
+        return [
+          "ASIN",
+          "Costco Product Name",
+          "Amazon Product Name",
+          "Matching Percentage",
+          "Sales Volume",
+          "Expected Sales Volume",
+          "Buy Box Price",
+          "Cheapest FBA Price",
+          "Cheapest FBM Price",
+          "Margin FBA",
+          "Margin FBM",
+          "Expected Total Net Profit FBA",
+          "Expected Total Net Profit FBM",
+          "Is Sold by Amazon"
+        ];
+      }
+    };
+  
+    const columns = getColumns();
+  
 
   if (!data || data.length === 0) {
     return null;
@@ -449,5 +487,6 @@ const ResultTable = ({ data, setData, onSaveSelected, isSavedResults = false, on
     </>
   );
 };
+
 
 export default ResultTable;

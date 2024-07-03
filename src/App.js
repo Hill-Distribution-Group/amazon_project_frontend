@@ -11,6 +11,7 @@ import backgroundImage from './assets/pexels-tiger-lily-4483775.jpg';
 import logo from './assets/hdg-logo.jpeg';
 import api from './api'; // Import the configured Axios instance
 import SavedResults from './SavedResults';
+import ToProcure from './ToProcure';
 
 let theme = createTheme({
   typography: {
@@ -119,6 +120,8 @@ function App() {
           } />
           <Route path="/dashboard" element={<ContentOverlay><Dashboard isLoggedIn={isLoggedIn} checkLoginStatus={checkLoginStatus} /> </ContentOverlay>} />
           <Route path="/saved-results" element={<ContentOverlay><SavedResults /> </ContentOverlay>} />
+          <Route path="/to-procure" element={<ToProcure />} />
+
 
         </Routes>
       </AppContainer>

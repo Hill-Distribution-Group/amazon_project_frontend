@@ -36,6 +36,8 @@ import api from './api';
 import axios from 'axios';
 import SaveIcon from '@mui/icons-material/Save';
 import { useNavigate } from 'react-router-dom';
+import HistoryIcon from '@mui/icons-material/History';
+
 
 let theme = createTheme({
   typography: {
@@ -395,6 +397,11 @@ const handleSaveSelected = async (selectedItems) => {
             <Tooltip title="View Saved Results">
               <IconButton onClick={() => navigate('/saved-results')}>
                 <SaveIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="View Past Searches">
+              <IconButton onClick={() => navigate('/past-searches')}>
+                <HistoryIcon />
               </IconButton>
             </Tooltip>
           </Box>

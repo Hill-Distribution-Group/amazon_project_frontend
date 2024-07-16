@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect,useCallback } from 'react';
 import { ThemeProvider, createTheme, responsiveFontSizes } from '@mui/material/styles';
-import { Container, Typography, Box, Paper, Grid, CssBaseline } from '@mui/material';
+import { Container, Typography, Box, Paper, Grid, CssBaseline, Snackbar, Alert } from '@mui/material';
 import { styled } from '@mui/system';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import LoginForm from './LoginForm';
@@ -9,11 +9,16 @@ import Header from './Header';
 import Footer from './Footer';
 import backgroundImage from './assets/pexels-tiger-lily-4483775.jpg';
 import logo from './assets/hdg-logo.jpeg';
-import api from './api'; // Import the configured Axios instance
-import SavedResults from './SavedResults';
+import api, { setLoadingSetter } from './api';
+import ToApprove from './ToApprove';
 import ToProcure from './ToProcure';
-import PastSearches from './PastSearches'; // Add this import
-import HelpPage from './HelpPage'; // Adjust path if needed
+import PastSearches from './PastSearches';
+import HelpPage from './HelpPage';
+import SupplierManagement from './SupplierManagement';
+import PurchaseOrders from './PurchaseOrders';
+import { SnackbarProvider, useSnackbar } from './SnackbarContext';
+import { LoadingProvider, useLoading } from './LoadingContext';
+import LoadingOverlay from './LoadingOverlay';
 
 let theme = createTheme({
   typography: {
@@ -51,7 +56,6 @@ const Logo = styled('img')({
   marginBottom: '2rem',
 });
 
-
 export const ContentOverlay = styled(Box)(({ theme }) => ({
   backgroundColor: 'rgba(255, 255, 255, 0.9)',
   minHeight: '100vh',
@@ -59,33 +63,39 @@ export const ContentOverlay = styled(Box)(({ theme }) => ({
   position: 'absolute',
 }));
 
-
-function App() {
+const AppContent = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const navigate = useNavigate();
+  const { snackbar, closeSnackbar } = useSnackbar();
+  const { setLoading } = useLoading();
 
-  const checkLoginStatus = async () => {
+  useEffect(() => {
+    setLoadingSetter(setLoading);
+  }, [setLoading]);
+
+  const checkLoginStatus = useCallback(async () => {
     try {
-      const response = await api.get('/check_login_status');
+      const response = await api.get('/api/auth/check_login_status');
       setIsLoggedIn(response.data.isAuthenticated);
     } catch (error) {
       console.error('Error checking login status:', error);
       setIsLoggedIn(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     checkLoginStatus();
-  }, []);
+    // Set up an interval to check login status every 5 minutes
+    const intervalId = setInterval(checkLoginStatus, 5 * 60 * 1000);
+    return () => clearInterval(intervalId);
+  }, [checkLoginStatus]);
 
   const handleLoginSuccess = () => {
     setIsLoggedIn(true);
     navigate('/dashboard');
   };
-
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
+    <>
       <Header isLoggedIn={isLoggedIn} onLogout={() => {
         setIsLoggedIn(false);
         navigate('/');
@@ -117,18 +127,42 @@ function App() {
               </Grid>
             ) : (
               <Dashboard isLoggedIn={isLoggedIn} checkLoginStatus={checkLoginStatus} />
-
             )
           } />
           <Route path="/dashboard" element={<ContentOverlay><Dashboard isLoggedIn={isLoggedIn} checkLoginStatus={checkLoginStatus} /> </ContentOverlay>} />
-          <Route path="/saved-results" element={<ContentOverlay><SavedResults /> </ContentOverlay>} />
+          <Route path="/to-approve" element={<ContentOverlay><ToApprove /> </ContentOverlay>} />
           <Route path="/to-procure" element={<ContentOverlay><ToProcure/></ContentOverlay>} />
           <Route path="/past-searches" element={<ContentOverlay><PastSearches/></ContentOverlay>} />
           <Route path="/help" element={<ContentOverlay><HelpPage /></ContentOverlay>} />
-
+          <Route path="/supplier-management" element={<ContentOverlay><SupplierManagement /></ContentOverlay>} />
+          <Route path="/purchase-orders" element={<ContentOverlay><PurchaseOrders /></ContentOverlay>} />
         </Routes>
       </AppContainer>
       <Footer />
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={closeSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Alert onClose={closeSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+      <LoadingOverlay />
+    </>
+  );
+};
+
+function App() {
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <SnackbarProvider>
+        <LoadingProvider>
+          <AppContent />
+        </LoadingProvider>
+      </SnackbarProvider>
     </ThemeProvider>
   );
 }

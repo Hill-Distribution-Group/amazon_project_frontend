@@ -1,43 +1,23 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  Container,
-  TextField,
-  Button,
-  Typography,
-  Paper,
-  CircularProgress,
-  Grid,
-  Box,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
-  InputAdornment,
-  LinearProgress,
-  Snackbar,
-  Alert,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
-  IconButton,
-  Tabs,
-  Tab,
-  Tooltip
+  Container, TextField, Button, Typography, Paper, CircularProgress, Grid, Box, MenuItem, Select,
+  FormControl, InputLabel, InputAdornment, LinearProgress, RadioGroup, FormControlLabel, Radio,
+  IconButton, Tabs, Tab, Tooltip, Autocomplete
 } from '@mui/material';
 import { ThemeProvider, createTheme, responsiveFontSizes } from '@mui/material/styles';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import SaveIcon from '@mui/icons-material/Save';
+import HistoryIcon from '@mui/icons-material/History';
 import { io } from 'socket.io-client';
-import ResultTable from './ResultTable';
+import { useNavigate } from 'react-router-dom';
 import { styled } from '@mui/system';
+import ResultTable from './ResultTable';
 import api from './api';
 import axios from 'axios';
-import SaveIcon from '@mui/icons-material/Save';
-import { useNavigate } from 'react-router-dom';
-import HistoryIcon from '@mui/icons-material/History';
-
+import { useSnackbar } from './SnackbarContext';
 
 let theme = createTheme({
   typography: {
@@ -156,7 +136,7 @@ const ResultBox = styled(Paper)(({ theme }) => ({
   },
 }));
 
-function Dashboard({ isLoggedIn, checkLoginStatus }) {
+const Dashboard = ({ isLoggedIn, checkLoginStatus }) => {
   const [processType, setProcessType] = useState('url');
   const [inputType, setInputType] = useState('title');
   const [url, setUrl] = useState('');
@@ -164,16 +144,20 @@ function Dashboard({ isLoggedIn, checkLoginStatus }) {
   const [costOfGoods, setCostOfGoods] = useState('');
   const [vat, setVat] = useState('');
   const [image, setImage] = useState(null);
-  const [results, setResults] = useState(null);
+  const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState([]);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarSeverity, setSnackbarSeverity] = useState('info');
-  const [snackbarMessage, setSnackbarMessage] = useState('');
   const [tabValue, setTabValue] = useState(0);
   const cancelTokenSource = useRef(axios.CancelToken.source());
   const navigate = useNavigate();
+  const [counterParty, setCounterParty] = useState('');
+  const [counterParties, setCounterParties] = useState([]);
+  const [loadingCounterParties, setLoadingCounterParties] = useState(false);
+  const [counterPartyError, setCounterPartyError] = useState(null);
+  const { showSnackbar } = useSnackbar();
+  const [localLoading, setLocalLoading] = useState(false);
 
+  // --- Socket.io Setup ---
   const socket = useMemo(() => io(`${process.env.REACT_APP_BACKEND_URL}`, {
     transports: ['websocket'],
     withCredentials: true,
@@ -182,29 +166,49 @@ function Dashboard({ isLoggedIn, checkLoginStatus }) {
     }
   }), []);
 
-  useEffect(() => {
-    checkLoginStatus();
-  }, [checkLoginStatus]);
+  // --- Data Fetching Functions ---
 
-const handleSaveSelected = async (selectedItems) => {
-  try {
-    const response = await api.post('/save_flagged', { items: selectedItems });
-    console.log('Save response:', response);
-    
-    setResults(prevResults => {
-      if (!Array.isArray(prevResults)) {
-        console.error('prevResults is not an array:', prevResults);
-        return [];
+  const fetchSearchResults = useCallback(async () => {
+    try {
+      const response = await api.get('/api/dashboard/get_search_results');
+      if (response.data) {
+        setResults(response.data);
       }
-      return prevResults.filter(item => !selectedItems.some(selectedItem => selectedItem.ASIN === item.ASIN));
-    });
-    
-    return response;
-  } catch (error) {
-    console.error('Error saving items:', error);
-    throw error;
-  }
-};
+    } catch (error) {
+      console.error('Error fetching search results:', error);
+      showSnackbar('Error fetching search results', 'error');
+    }
+  }, [showSnackbar]);
+
+  const fetchCounterParties = useCallback(async () => {
+    setLoadingCounterParties(true);
+    setCounterPartyError(null);
+    try {
+      const response = await api.get('/api/to_procure/get_suppliers');
+      const sortedCounterParties = response.data.sort((a, b) => a.name.localeCompare(b.name));
+      setCounterParties(sortedCounterParties);
+    } catch (error) {
+      console.error('Error fetching counter parties:', error);
+      setCounterPartyError('Failed to load counter parties. Please try again.');
+      showSnackbar('Error fetching counter parties', 'error');
+    } finally {
+      setLoadingCounterParties(false);
+    }
+  }, [showSnackbar]);
+
+  useEffect(() => {
+    fetchCounterParties();
+    fetchSearchResults();
+  }, [fetchCounterParties, fetchSearchResults]);
+ 
+
+  // --- Log Handling ---
+  const addLog = useCallback((message, type = 'info', timestamp = new Date().toLocaleString()) => {
+    setLogs((logs) => [...logs, { message, type, timestamp }]);
+    if (type === 'warning' || type === 'error') {
+      showSnackbar(message, type);
+    }
+  }, [showSnackbar]);
 
   useEffect(() => {
     socket.on('log_message', (log) => {
@@ -219,172 +223,198 @@ const handleSaveSelected = async (selectedItems) => {
     return () => {
       socket.off('log_message');
     };
-  }, [socket]);
+  }, [socket, addLog]);
 
+  // Auto-scroll log container
   useEffect(() => {
     const logContainer = document.getElementById('log-container');
-    if (logContainer && logContainer.scrollHeight > logContainer.clientHeight) {
-      logContainer.style.overflowY = 'scroll';
+    if (logContainer) { 
+      logContainer.scrollTop = logContainer.scrollHeight;
     }
-  }, [logs]);
+  }, [logs]); 
 
-  useEffect(() => {
-    const handleBeforeUnload = (event) => {
-      if (loading) {
-        event.preventDefault();
-        event.returnValue = '';
-        return 'You have an ongoing process. Are you sure you want to leave? This will stop the process.';
-      }
-    };
-
-    const handleUnload = () => {
-      if (loading) {
-        navigator.sendBeacon(`${process.env.REACT_APP_BACKEND_URL}/stop_process`, JSON.stringify({
-          reason: "User closed the tab or refreshed",
+  // --- Data Handling Functions ---
+  const handleSaveSelected = async (selectedItems) => {
+    try {
+      const response = await api.post('/api/dashboard/save_flagged', { items: selectedItems });
+      if (response.data && response.data.message) {
+        setResults(prevResults => prevResults.map(item => {
+          if (selectedItems.some(selectedItem => selectedItem.ASIN === item.ASIN)) {
+            return { ...item, is_sent_for_approval: true };
+          }
+          return item;
         }));
+        showSnackbar(response.data.message, 'success');
+        return { success: true, message: response.data.message };
       }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('unload', handleUnload);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('unload', handleUnload);
-    };
-  }, [loading]);
-
-  const handleTabChange = (event, newValue) => {
-    setTabValue(newValue);
-    setProcessType(['url', 'text', 'image'][newValue]);
-    setResults(null);
+    } catch (error) {
+      showSnackbar(error.response?.data?.message || 'Error sending items for approval. Please try again.', 'error');
+      return { success: false, message: error.response?.data?.message || 'Error sending items for approval' };
+    }
   };
 
-  const pollProcessingStatus = async () => {
+  const handleRemoveSelected = async (selectedItems) => {
     try {
-      const response = await api.get('/process_status');
+      const asinList = selectedItems.map(item => item.ASIN);
+      await api.post('/api/dashboard/remove_results', { asin_list: asinList });
+      setResults(prevResults => prevResults.filter(item => !asinList.includes(item.ASIN)));
+      showSnackbar('Selected items removed successfully', 'success');
+    } catch (error) {
+      console.error('Error removing items:', error);
+      showSnackbar('Error removing items. Please try again.', 'error');
+    }
+  };
+
+  const handleDashboardDecisionUpdate = async (updatedItem) => {
+    try {
+      const response = await api.post('/api/dashboard/update_decision', {
+        asin: updatedItem.ASIN,
+        decision: updatedItem.Decision,
+      });
+      if (response.status === 200) {
+        setResults(prevResults => prevResults.map(item => 
+          item.ASIN === updatedItem.ASIN ? { ...item, Decision: updatedItem.Decision } : item
+        ));
+        showSnackbar('Decision updated successfully', 'success');
+      } else {
+        showSnackbar('Failed to update decision', 'error');
+      }
+    } catch (error) {
+      console.error('Error updating decision:', error);
+      showSnackbar('Failed to update decision', 'error');
+    }
+  };
+
+  const handleCommentUpdate = async (updatedItem) => {
+    try {
+      const response = await api.post('/api/dashboard/update_comment', {
+        asin: updatedItem.ASIN,
+        comment: updatedItem.Comment,
+      });
+      if (response.status === 200) {
+        setResults(prevResults => prevResults.map(item => 
+          item.ASIN === updatedItem.ASIN ? { ...item, Comment: updatedItem.Comment } : item
+        ));
+        showSnackbar('Comment updated successfully', 'success');
+      } else {
+        showSnackbar('Failed to update comment', 'error');
+      }
+    } catch (error) {
+      console.error('Error updating comment:', error);
+      showSnackbar('Failed to update comment', 'error');
+    }
+  };
+
+  // --- Form Submission and Processing ---
+  const pollProcessingStatus = useCallback(async () => {
+    try {
+      const response = await api.get('/api/dashboard/process_status');
       const { status } = response.data;
 
       if (status === 'completed') {
-        handleDownloadResult();
+        const resultResponse = await api.get('/api/dashboard/get_result');
+        setResults(Array.isArray(resultResponse.data) ? resultResponse.data : [resultResponse.data]);
+        showSnackbar('Processing completed successfully', 'success');
+        setLocalLoading(false);
         setLoading(false);
       } else if (status === 'stopped' || status === 'error') {
         addLog(`Process ${status}`, 'error');
+        setLocalLoading(false);
         setLoading(false);
       } else {
         setTimeout(pollProcessingStatus, 2000);
       }
     } catch (error) {
       addLog(`Error checking processing status: ${error.message}`, 'error');
+      setLocalLoading(false);
       setLoading(false);
     }
-  };
+  }, [addLog, showSnackbar, setLoading]);
 
-  const handleDownloadResult = async () => {
+  const handleSubmit = useCallback(async () => {
     try {
-      const resultResponse = await api.get('/get_result', { responseType: 'json' });
-      setResults(Array.isArray(resultResponse.data) ? resultResponse.data : [resultResponse.data]);
-    } catch (error) {
-      addLog(`Error downloading results: ${error.message}`, 'error');
+      if (localLoading) return;
+      if (!counterParty && tabValue === 1) {
+        showSnackbar('Please select a Counter Party', 'error');
+        return;
+      }
+
+      setLocalLoading(true);
+      setLoading(true);
+      setLogs([]);
       setResults([]);
-    }
-  };
+      cancelTokenSource.current = api.CancelToken.source();
 
-  const handleDashboardDecisionUpdate = (updatedItem) => {
-    setResults(prevResults => {
-      if (!Array.isArray(prevResults)) {
-        console.error('prevResults is not an array:', prevResults);
-        return [updatedItem];
+      let response;
+      if (processType === 'url') {
+        response = await api.post(
+          '/api/dashboard/process_url',
+          { url },
+          { cancelToken: cancelTokenSource.current.token }
+        );
+      } else if (processType === 'text') {
+        response = await api.post(
+          '/api/dashboard/process_text',
+          { 
+            input_type: inputType, 
+            input_value: inputValue, 
+            cost_of_goods: costOfGoods, 
+            vat, 
+            counter_party: counterParty
+          },
+          { cancelToken: cancelTokenSource.current.token }
+        );
+      } else if (processType === 'image') {
+        const formData = new FormData();
+        formData.append('image', image);
+        response = await api.post(
+          '/api/dashboard/process_image',
+          formData,
+          {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            cancelToken: cancelTokenSource.current.token,
+          }
+        );
+      } else {
+        throw new Error('Invalid process type');
       }
-      return prevResults.map(item => 
-        item.ASIN === updatedItem.ASIN ? { ...item, Decision: updatedItem.Decision } : item
-      );
-    });
-  };
 
-  const handleSubmit = async () => {
-    if (loading) return;
-    setLoading(true);
-    setLogs([]);
-    setResults(null);
-    cancelTokenSource.current = axios.CancelToken.source();
-
-    try {
-      switch (processType) {
-        case 'url':
-          await api.post(
-            '/process_url',
-            { url },
-            { cancelToken: cancelTokenSource.current.token }
-          );
-          break;
-        case 'text':
-          await api.post(
-            '/process_text',
-            { input_type: inputType, input_value: inputValue, cost_of_goods: costOfGoods, vat },
-            { cancelToken: cancelTokenSource.current.token }
-          );
-          break;
-        case 'image':
-          const formData = new FormData();
-          formData.append('image', image);
-          await api.post(
-            '/process_image',
-            formData,
-            {
-              headers: { 'Content-Type': 'multipart/form-data' },
-              cancelToken: cancelTokenSource.current.token,
-            }
-          );
-          break;
-        default:
-          throw new Error('Invalid process type');
+      if (response.data && response.data.message === "Processing started") {
+        pollProcessingStatus();
+      } else {
+        setResults(response.data);
+        showSnackbar('Processing completed successfully', 'success');
+        setLocalLoading(false);
+        setLoading(false);
       }
-      pollProcessingStatus();
     } catch (error) {
-      handleError(error, `processing ${processType}`);
-      setLoading(false);
-    }
-  };
-
-  const handleCancel = async () => {
-    if (loading) {
-      cancelTokenSource.current.cancel('Operation canceled by the user.');
-      try {
-        addLog('Cancelling process...', 'warning');
-        await api.post('/stop_process');
-        addLog('Process stopped successfully', 'warning');
-      } catch (error) {
-        addLog(`Error stopping process: ${error.message}`, 'error');
+      if (axios.isCancel(error)) {
+        showSnackbar('Request was cancelled', 'info');
+      } else {
+        showSnackbar(`Error processing ${processType}: ${error.message}`, 'error');
+        console.error('Error details:', error);
       }
+      setLocalLoading(false);
       setLoading(false);
     }
+  }, [localLoading, counterParty, tabValue, processType, url, inputType, 
+      inputValue, costOfGoods, vat, image, showSnackbar, setLoading, pollProcessingStatus]);
+
+  const handleCancel = () => {
+    if (cancelTokenSource.current) {
+      cancelTokenSource.current.cancel('Operation canceled by the user.');
+    }
+    setLocalLoading(false);
+    setLoading(false);
+    showSnackbar('Processing cancelled', 'info');
   };
 
-  const addLog = (message, type = 'info', timestamp = new Date().toLocaleString()) => {
-    setLogs((logs) => [...logs, { message, type, timestamp }]);
-    if (type === 'warning' || type === 'error') {
-      setSnackbarSeverity(type);
-      setSnackbarMessage(message);
-      setSnackbarOpen(true);
-    }
+  // --- UI Handling Functions ---
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+    setProcessType(['url', 'text', 'image'][newValue]);
   };
 
-  const handleError = (error, action) => {
-    if (axios.isCancel(error)) {
-      addLog('Request canceled by the user.', 'info');
-    } else {
-      addLog(`Error ${action}: ${error.message}`, 'error');
-      setResults(null);
-    }
-  };
-
-  const handleSnackbarClose = (event, reason) => {
-    if (reason === 'clickaway') {
-      return;
-    }
-    setSnackbarOpen(false);
-  };
 
   return (
     <ThemeProvider theme={theme}>
@@ -394,8 +424,8 @@ const handleSaveSelected = async (selectedItems) => {
             Amazon Product Matching
           </Typography>
           <Box>
-            <Tooltip title="View Saved Results">
-              <IconButton onClick={() => navigate('/saved-results')}>
+            <Tooltip title="View To Approve">
+              <IconButton onClick={() => navigate('/to-approve')}>
                 <SaveIcon />
               </IconButton>
             </Tooltip>
@@ -473,6 +503,47 @@ const handleSaveSelected = async (selectedItems) => {
                       <MenuItem value="0.2">20%</MenuItem>
                     </Select>
                   </FormControl>
+                  <FormControl fullWidth margin="normal" variant="outlined">
+                    <Autocomplete
+                      value={counterParty}
+                      onChange={(event, newValue) => {
+                        setCounterParty(newValue);
+                      }}
+                      disablePortal
+                      options={counterParties}
+                      getOptionLabel={(option) => option?.name || ''}
+                      isOptionEqualToValue={(option, value) => option.id === value?.id}
+                      loading={loadingCounterParties}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Counter Party"
+                          required
+                          error={!!counterPartyError}
+                          helperText={counterPartyError}
+                          InputProps={{
+                            ...params.InputProps,
+                            endAdornment: (
+                              <>
+                                {loadingCounterParties ? <CircularProgress color="inherit" size={20} /> : null}
+                                {params.InputProps.endAdornment}
+                              </>
+                            ),
+                          }}
+                        />
+                      )}
+                      ListboxProps={{
+                        style: { maxHeight: 200, overflow: 'auto' }
+                      }}
+                      renderOption={(props, option) => (
+                        <li {...props} key={option.id}>
+                          {option.name}
+                        </li>
+                      )}
+                      fullWidth
+                      noOptionsText="No counter parties found"
+                    />
+                  </FormControl>
                 </Box>
               )}
 
@@ -543,30 +614,22 @@ const handleSaveSelected = async (selectedItems) => {
 
         <ResultBox>
           <Typography variant="h6">Results</Typography>
-          {loading && <LinearProgress />}
-          {results && (
-  <ResultTable 
-    data={results} 
-    setData={setResults}
-    onSaveSelected={handleSaveSelected}
-    onDecisionUpdate={handleDashboardDecisionUpdate}
-    isSavedResults={false}
-  />
-)}
+          {localLoading && <LinearProgress />}
+          {!localLoading && results.length > 0 && (
+            <ResultTable 
+              data={results} 
+              setData={setResults}
+              onSaveSelected={handleSaveSelected}
+              onRemoveSelected={handleRemoveSelected}
+              onDecisionUpdate={handleDashboardDecisionUpdate}
+              onCommentUpdate={handleCommentUpdate}
+              isSavedResults={false}
+            />
+          )}
         </ResultBox>
-
-        <Snackbar
-          open={snackbarOpen}
-          autoHideDuration={6000}
-          onClose={handleSnackbarClose}
-        >
-          <Alert onClose={handleSnackbarClose} severity={snackbarSeverity} elevation={6} variant="filled">
-            {snackbarMessage}
-          </Alert>
-        </Snackbar>
       </AppContainer>
     </ThemeProvider>
   );
-}
+};
 
 export default Dashboard;

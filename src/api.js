@@ -8,22 +8,24 @@ const api = axios.create({
   }
 });
 
+let loadingSetter = null;
+
+export const setLoadingSetter = (setter) => {
+  loadingSetter = setter;
+};
+
 // Request Interceptor
 api.interceptors.request.use(
   (config) => {
+    if (loadingSetter) loadingSetter(true);
     const token = localStorage.getItem('access_token');
-    console.log('Request Interceptor - Token:', token);
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
-    console.log('Request URL:', config.url);
-    console.log('Request Method:', config.method);
-    console.log('Request Headers:', config.headers);
-    console.log('Request Data:', config.data);
     return config;
   },
   (error) => {
-    console.error('Request Interceptor Error:', error);
+    if (loadingSetter) loadingSetter(false);
     return Promise.reject(error);
   }
 );
@@ -31,13 +33,12 @@ api.interceptors.request.use(
 // Response Interceptor
 api.interceptors.response.use(
   (response) => {
-    console.log('Response Status:', response.status);
-    console.log('Response Data:', response.data);
+    if (loadingSetter) loadingSetter(false);
     return response;
   },
   async (error) => {
+    if (loadingSetter) loadingSetter(false);
     const originalRequest = error.config;
-    console.log('Response Error:', error.response);
     
     if (error.response && error.response.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
@@ -45,18 +46,19 @@ api.interceptors.response.use(
         const refreshToken = localStorage.getItem('refresh_token');
         const response = await api.post('/refresh', { refresh_token: refreshToken });
         const { token } = response.data;
-        console.log('Token refreshed - New Token:', token);
         localStorage.setItem('access_token', token);
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         originalRequest.headers['Authorization'] = `Bearer ${token}`;
         return api(originalRequest);
       } catch (refreshError) {
-        console.error('Refresh Token Error:', refreshError);
         return Promise.reject(refreshError);
       }
     }
     return Promise.reject(error);
   }
 );
+
+api.CancelToken = axios.CancelToken;
+api.isCancel = axios.isCancel;
 
 export default api;

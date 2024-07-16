@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, CircularProgress, Snackbar, Alert } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import ToProcureTable from './ToProcureTable';
 import api from './api';
+import { useSnackbar } from './SnackbarContext';
 
 const ToProcure = () => {
   const [toProcureItems, setToProcureItems] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  const { showSnackbar } = useSnackbar();
 
   useEffect(() => {
     fetchToProcureItems();
@@ -15,34 +15,43 @@ const ToProcure = () => {
 
   const fetchToProcureItems = async () => {
     try {
-      const response = await api.get('/get_to_procure_items');
+      const response = await api.get('/api/to_procure/get_to_procure_items');
       setToProcureItems(response.data);
-      setLoading(false);
     } catch (error) {
       console.error('Error fetching to procure items:', error);
       setError(error.response?.data?.message || 'Failed to load to procure items. Please try again later.');
-      setLoading(false);
     }
   };
 
   const handleCreatePurchaseOrder = async (selectedItems, errorMessage) => {
     if (errorMessage) {
-      setSnackbar({ open: true, message: errorMessage, severity: 'error' });
+      showSnackbar(errorMessage, 'error');
       return;
     }
 
     try {
-      const response = await api.post('/create_purchase_order', { items: selectedItems });
+      const response = await api.post('/api/to_procure/create_purchase_order', { items: selectedItems });
       await fetchToProcureItems();
-      setSnackbar({ open: true, message: response.data.message || "Purchase order created successfully", severity: 'success' });
+      showSnackbar(response.data.message || 'Purchase order created successfully', 'success');
     } catch (error) {
       console.error('Error creating purchase order:', error);
-      setSnackbar({ open: true, message: error.response?.data?.error || "Error creating purchase order. Please try again.", severity: 'error' });
+      showSnackbar(
+        error.response?.data?.message || 'Failed to create purchase order. Please try again.',
+        'error'
+      );
     }
   };
 
-  if (loading) return <CircularProgress aria-label="Loading to procure items" />;
-  if (error) return <Typography color="error" role="alert">{error}</Typography>;
+
+  if (error) {
+    return (
+      <Box width="100%">
+        <Typography variant="h4" color="error" align="center">
+          {error}
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box>
@@ -52,18 +61,8 @@ const ToProcure = () => {
         setData={setToProcureItems}
         onSaveSelected={handleCreatePurchaseOrder}
       />
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-      >
-        <Alert onClose={() => setSnackbar(prev => ({ ...prev, open: false }))} severity={snackbar.severity} elevation={6} variant="filled">
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 };
-
 
 export default ToProcure;

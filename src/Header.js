@@ -37,7 +37,7 @@ const Header = ({ isLoggedIn, onLogout }) => {
 
   const handleLogout = async () => {
     try {
-      await api.post('/logout');
+      await api.post('/api/auth/logout');
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       onLogout();

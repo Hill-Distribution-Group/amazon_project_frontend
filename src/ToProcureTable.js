@@ -1,10 +1,9 @@
-// ToProcureTable.js
-import React, { useState, useMemo, useEffect,useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-   Box, Checkbox, TextField, FormControl, InputLabel, Select,
+  Box, Checkbox, TextField, FormControl, InputLabel, Select,
   MenuItem, Snackbar, Alert, Dialog, DialogTitle, DialogContent,
-  DialogActions, List, ListItem, ListItemText, IconButton, Menu, Tooltip, Button
+  DialogActions, List, ListItem, ListItemText, IconButton, Menu, Tooltip, Button, Modal, Typography
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -12,6 +11,7 @@ import api from './api';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import OrderedJsonViewer from './OrderedJsonViewer';
 
 const ToProcureTable = ({ data, setData, onSaveSelected }) => {
   const [selectedProducts, setSelectedProducts] = useState({});
@@ -25,24 +25,15 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
   const [poDialogOpen, setPoDialogOpen] = useState(false);
   const [poDetails, setPoDetails] = useState([]);
   const [contextMenu, setContextMenu] = useState(null);
-  const [suppliers, setSuppliers] = useState([]);
   const [isPoValid, setIsPoValid] = useState(false);
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState(null);
-
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [extraPackingNeeded, setExtraPackingNeeded] = useState('');
 
 
   useEffect(() => {
-    const fetchSuppliers = async () => {
-      try {
-        const response = await api.get('/get_suppliers');
-        setSuppliers(response.data);
-      } catch (error) {
-        console.error('Error fetching suppliers:', error);
-      }
-    };
-  
-    fetchSuppliers();
-  }, []);
+    setEditedData(data.reduce((acc, item) => ({ ...acc, [item.ID]: { ...item } }), {}));
+  }, [data]);
 
   const truncateText = (text, maxLength) => {
     if (text && text.length > maxLength) {
@@ -51,14 +42,10 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
     return text || '';
   };
 
-  useEffect(() => {
-    setEditedData(data.reduce((acc, item) => ({ ...acc, [item.product_id]: { ...item } }), {}));
-  }, [data]);
-
   const handleCheckboxChange = (product) => {
     setSelectedProducts((prevSelected) => ({
       ...prevSelected,
-      [product.product_id]: !prevSelected[product.product_id]
+      [product.ID]: !prevSelected[product.ID]
     }));
   };
 
@@ -67,20 +54,24 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
       ...editedData[id],
       [field]: value
     };
-  
+
     setEditedData(prev => ({
       ...prev,
       [id]: updatedData
     }));
-  
+
+    // Update the main data array
+    setData(prevData =>
+      prevData.map(item => item.ID === id ? { ...item, [field]: value } : item)
+    );
+
     try {
-      await api.post('/update_to_procure_items', { items: [updatedData] });
+      await api.post('/api/to_procure/update_to_procure_items', { items: [updatedData] });
       setSnackbarMessage("Changes saved successfully.");
       setSnackbarSeverity('success');
       setSnackbarOpen(true);
-      
-      // Reset poDetails and isPoValid when quantity changes
-      if (field === 'quantity') {
+
+      if (field === 'Quantity') {
         setPoDetails([]);
         setIsPoValid(false);
       }
@@ -116,21 +107,20 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
 
   const handleCreatePO = () => {
     if (contextMenu) {
-      const selectedItem = editedData[contextMenu.product.product_id];
-      setPoDetails([{
+      const selectedItem = editedData[contextMenu.product.ID];
+      const newPoDetails = [{
         ...selectedItem,
-        totalQuantity: selectedItem.quantity,
+        totalQuantity: parseInt(selectedItem.Quantity) || 0,
         splits: [
-          { id: 1, channel: 'Amazon FBA', quantity: Math.floor(selectedItem.quantity / 2) },
-          { id: 2, channel: 'Amazon FBM', quantity: Math.ceil(selectedItem.quantity / 2) }
+          { id: 1, channel: 'Amazon FBA', quantity: Math.floor((parseInt(selectedItem.Quantity) || 0) / 2) },
+          { id: 2, channel: 'Amazon FBM', quantity: Math.ceil((parseInt(selectedItem.Quantity) || 0) / 2) }
         ]
-      }]);
-      setIsPoValid(true);
+      }];
+      setPoDetails(newPoDetails);
       setPoDialogOpen(true);
       handleCloseContextMenu();
     }
   };
-
 
   const handleAddSplit = (index) => {
     setPoDetails(prevDetails => {
@@ -158,42 +148,46 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
   };
 
   const validatePoDetails = useCallback(() => {
+    if (poDetails.length === 0 || !expectedDeliveryDate) {
+      return false;
+    }
+    
     return poDetails.every(item => {
       const splitTotal = item.splits.reduce((sum, split) => sum + parseInt(split.quantity || 0), 0);
-      return splitTotal === item.totalQuantity;
-    }) && expectedDeliveryDate !== null;
+      return splitTotal === item.totalQuantity && item.totalQuantity > 0;
+    });
   }, [poDetails, expectedDeliveryDate]);
-  
-  useEffect(() => {
-    setIsPoValid(validatePoDetails());
-  }, [validatePoDetails]);
 
-  const handleSplitChange = (itemIndex, splitId, field, value) => {
+  useEffect(() => {
+    const isValid = validatePoDetails();
+    setIsPoValid(isValid);
+  }, [validatePoDetails, poDetails, expectedDeliveryDate]);
+
+const handleSplitChange = (itemIndex, splitId, field, value) => {
     setPoDetails(prevDetails => {
       const newDetails = [...prevDetails];
       const item = newDetails[itemIndex];
       const splitIndex = item.splits.findIndex(split => split.id === splitId);
-      
+
       if (splitIndex === -1) return prevDetails;
-  
+
       const updatedSplit = {
         ...item.splits[splitIndex],
         [field]: field === 'quantity' ? parseInt(value) || 0 : value
       };
-  
+
       const updatedSplits = [...item.splits];
       updatedSplits[splitIndex] = updatedSplit;
-  
+
       newDetails[itemIndex] = {
         ...item,
         splits: updatedSplits
       };
-  
+
       return newDetails;
     });
   };
 
-  
   const getAvailableSalesChannels = (item) => {
     const usedChannels = new Set(item.splits.map(split => split.channel));
     return ['Amazon FBA', 'Amazon FBM', 'eBay', 'TikTok', 'Not Specified'].filter(channel => !usedChannels.has(channel));
@@ -206,11 +200,11 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
     }
 
     const purchaseOrders = poDetails.map(item => ({
-      product_id: item.product_id,
+      product_id: item['Product ID'],
       quantity: item.totalQuantity,
-      unit_cost: item.purchase_price,
-      counter_party: item.counter_party,
-      extra_packing_needed: item.extra_packing_needed,
+      unit_cost: item['Cost of Goods'],
+      counter_party: item['Counter Party'],
+      extra_packing_needed: extraPackingNeeded,
       expected_delivery_date: expectedDeliveryDate.toISOString().split('T')[0],
       sales_channel_split: item.splits.reduce((acc, split) => {
         acc[split.channel] = split.quantity;
@@ -222,10 +216,11 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
     handlePoDialogClose();
   };
 
+
   const handleRemoveItems = async () => {
     const itemsToRemove = Object.keys(selectedProducts)
-      .filter(productId => selectedProducts[productId])
-      .map(productId => ({ product_id: productId }));
+      .filter(id => selectedProducts[id])
+      .map(id => ({ id: id }));
 
     if (itemsToRemove.length === 0) {
       setSnackbarMessage("No items selected for removal.");
@@ -235,28 +230,45 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
     }
 
     try {
-      await api.post('/remove_to_procure_items', { items: itemsToRemove });
-      setSnackbarMessage("Items removed successfully.");
-      setSnackbarSeverity('success');
-      setSnackbarOpen(true);
-      setSelectedProducts({});
-      // Optionally, refetch the data or remove items from the current state
-      const updatedData = data.filter(product => !selectedProducts[product.product_id]);
-      setData(updatedData);
+      const response = await api.post('/api/to_procure/remove_to_procure_items', { items: itemsToRemove });
+      
+      if (response.status === 200) {
+        setSnackbarMessage(response.data.message);
+        setSnackbarSeverity('success');
+        setSnackbarOpen(true);
+        
+        const updatedData = data.filter(product => !selectedProducts[product.ID]);
+        setData(updatedData);
+        
+        setSelectedProducts({});
+      } else {
+        throw new Error(response.data.error || 'Failed to remove items');
+      }
     } catch (error) {
       console.error('Error removing items:', error);
-      setSnackbarMessage("Error removing items. Please try again.");
+      setSnackbarMessage(error.message || "Error removing items. Please try again.");
       setSnackbarSeverity('error');
       setSnackbarOpen(true);
     }
   };
 
+  const handleRowClick = (event, product) => {
+    if (event.target.closest('input, select, .MuiCheckbox-root')) {
+      return;
+    }
+    setSelectedProduct(product);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedProduct(null);
+  };
+
   const filteredData = useMemo(() => {
     if (!data || data.length === 0) return [];
     return data.filter(product =>
-      (product.product_name || '').toLowerCase().includes(filterText.toLowerCase()) ||
-      (product.product_asin || '').toLowerCase().includes(filterText.toLowerCase()) ||
-      (product.product_sku || '').toLowerCase().includes(filterText.toLowerCase())
+      (product['Amazon Product Name'] || '').toLowerCase().includes(filterText.toLowerCase()) ||
+      (product['ASIN'] || '').toLowerCase().includes(filterText.toLowerCase()) ||
+      (product['Product SKU'] || '').toLowerCase().includes(filterText.toLowerCase())
     );
   }, [data, filterText]);
 
@@ -275,6 +287,104 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
     });
   }, [filteredData, sortField, sortDirection]);
 
+  const getDecisionBasedColumns = () => {
+    return [
+      { field: 'ASIN', headerName: 'ASIN' },
+      { field: 'Product SKU', headerName: 'SKU' },
+      { field: 'Amazon Product Name', headerName: 'Product Name' },
+      { field: 'Cost of Goods', headerName: 'Cost of Goods', editable: true },
+      { field: 'Quantity', headerName: 'Quantity', editable: true },
+      { field: 'VAT Rate', headerName: 'VAT Rate', editable: true, type: 'select' },
+      { field: 'Counter Party', headerName: 'Counter Party' },
+      { field: 'Sell Price FBA', headerName: 'Sell Price FBA' },
+      { field: 'Sell Price FBM', headerName: 'Sell Price FBM' },
+      { field: 'Margin FBA', headerName: 'Margin FBA' },
+      { field: 'Margin FBM', headerName: 'Margin FBM' },
+      { field: 'Margin FBA Non Registered', headerName: 'Margin FBA Non Registered' },
+      { field: 'Margin FBM Non Registered', headerName: 'Margin FBM Non Registered' },
+      { field: 'Net Profit FBA', headerName: 'Net Profit FBA' },
+      { field: 'Net Profit FBM', headerName: 'Net Profit FBM' },
+      { field: 'Net Profit FBA Non Registered', headerName: 'Net Profit FBA Non Registered' },
+      { field: 'Net Profit FBM Non Registered', headerName: 'Net Profit FBM Non Registered' },
+      { field: 'Approved By', headerName: 'Approved By' },
+      { field: 'Approved At', headerName: 'Approved At' },
+      { field: 'Decision', headerName: 'Decision' }
+    ];
+  };
+
+  const columns = useMemo(() => getDecisionBasedColumns(), []);
+
+  const getHighlightedColumns = (decision) => {
+    if (decision.includes('FBA')) {
+      return ['Sell Price FBA', 'Margin FBA', 'Net Profit FBA'];
+    } else if (decision.includes('FBM')) {
+      return ['Sell Price FBM', 'Margin FBM', 'Net Profit FBM'];
+    }
+    return [];
+  };
+
+  const vatRateOptions = [
+    { value: '0', label: '0%' },
+    { value: '0.05', label: '5%' },
+    { value: '0.2', label: '20%' },
+  ];
+
+  const extraPackagingOptions = [
+    { value: 'None', label: 'None' },
+    { value: 'Bubble Wrap', label: 'Bubble Wrap' },
+    { value: 'Box', label: 'Box' },
+    { value: 'Fragile Sticker', label: 'Fragile Sticker' },
+  ];
+
+  const renderEditableCell = (item, column) => {
+    const value = editedData[item.ID]?.[column.field] || item[column.field];
+    const highlightedColumns = getHighlightedColumns(item.Decision || '');
+    const isHighlighted = highlightedColumns.includes(column.field);
+
+    const cellStyle = {
+      backgroundColor: isHighlighted ? '#e3f2fd' : 'inherit',
+      fontWeight: isHighlighted ? 'bold' : 'normal',
+    };
+
+    if (column.field === 'Amazon Product Name') {
+      return (
+        <Tooltip title={value || 'N/A'}>
+          <span style={cellStyle}>{truncateText(value, 30)}</span>
+        </Tooltip>
+      );
+    }
+
+    if (column.type === 'select') {
+      const options = column.field === 'VAT Rate' ? vatRateOptions : [];
+      return (
+        <FormControl fullWidth onClick={(e) => e.stopPropagation()} style={cellStyle}>
+          <Select
+            value={value}
+            onChange={(e) => handleInputChange(item.ID, column.field, e.target.value)}
+          >
+            {options.map((option) => (
+              <MenuItem key={option.value} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      );
+    } else if (column.editable) {
+      return (
+        <TextField
+          value={value}
+          onChange={(e) => handleInputChange(item.ID, column.field, e.target.value)}
+          type={column.field === 'Quantity' ? 'number' : 'text'}
+          InputProps={{ style: { ...cellStyle, width: column.field === 'Quantity' ? '80px' : '100px' } }}
+          onClick={(e) => e.stopPropagation()}
+        />
+      );
+    } else {
+      return <span style={cellStyle}>{value}</span>;
+    }
+  };
+
   return (
     <>
       <Box display="flex" justifyContent="space-between" mb={2}>
@@ -290,10 +400,10 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
             onChange={(e) => setSortField(e.target.value)}
           >
             <MenuItem value=""><em>None</em></MenuItem>
-            <MenuItem value="purchase_price">Purchase Price</MenuItem>
-            <MenuItem value="sell_price_fba">Sell Price FBA</MenuItem>
-            <MenuItem value="sell_price_fbm">Sell Price FBM</MenuItem>
-            <MenuItem value="quantity">Quantity</MenuItem>
+            <MenuItem value="Cost of Goods">Cost of Goods</MenuItem>
+            <MenuItem value="Sell Price FBA">Sell Price FBA</MenuItem>
+            <MenuItem value="Sell Price FBM">Sell Price FBM</MenuItem>
+            <MenuItem value="Quantity">Quantity</MenuItem>
           </Select>
         </FormControl>
         <FormControl>
@@ -311,107 +421,29 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>ASIN</TableCell>
-              <TableCell>SKU</TableCell>
-              <TableCell>Product Name</TableCell>
-              <TableCell>Purchase Price</TableCell>
-              <TableCell>Sell Price FBA</TableCell>
-              <TableCell>Sell Price FBM</TableCell>
-              <TableCell>Quantity</TableCell>
-              <TableCell>VAT Rate</TableCell>
-              <TableCell>Counter Party</TableCell>
-              <TableCell>Extra Packing Needed</TableCell>
-              <TableCell>Approved By</TableCell>
-              <TableCell>Approved At</TableCell>
+              {columns.map((column) => (
+                <TableCell key={column.field}>{column.headerName}</TableCell>
+              ))}
               <TableCell align="center">Select</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {sortedData.map((product) => (
+            {sortedData.map((item) => (
               <TableRow
-                key={product.product_id}
-                style={{ cursor: 'context-menu' }}
-                onContextMenu={(event) => handleContextMenu(event, product)}
+                key={item.ID}
+                onClick={(event) => handleRowClick(event, item)}
+                onContextMenu={(event) => handleContextMenu(event, item)}
+                style={{ cursor: 'pointer' }}
               >
-                <TableCell>{product.product_asin || 'N/A'}</TableCell>
-                <TableCell>{product.product_sku || 'N/A'}</TableCell>
-                <TableCell>
-                  <Tooltip title={product.product_name || 'N/A'}>
-                    <span>{truncateText(product.product_name, 30)}</span>
-                  </Tooltip>
-                </TableCell>
-                <TableCell>
-                  <TextField
-                    value={editedData[product.product_id]?.purchase_price || ''}
-                    onChange={(e) => handleInputChange(product.product_id, 'purchase_price', e.target.value)}
-                    type="number"
-                    InputProps={{ style: { width: '100px' } }}
-                  />
-                </TableCell>
-                <TableCell>
-                  <TextField
-                    value={editedData[product.product_id]?.sell_price_fba || ''}
-                    onChange={(e) => handleInputChange(product.product_id, 'sell_price_fba', e.target.value)}
-                    type="number"
-                    InputProps={{ style: { width: '100px' } }}
-                  />
-                </TableCell>
-                <TableCell>
-                  <TextField
-                    value={editedData[product.product_id]?.sell_price_fbm || ''}
-                    onChange={(e) => handleInputChange(product.product_id, 'sell_price_fbm', e.target.value)}
-                    type="number"
-                    InputProps={{ style: { width: '100px' } }}
-                  />
-                </TableCell>
-                <TableCell>
-                  <TextField
-                    value={editedData[product.product_id]?.quantity || ''}
-                    onChange={(e) => handleInputChange(product.product_id, 'quantity', e.target.value)}
-                    type="number"
-                    InputProps={{ style: { width: '80px' } }}
-                  />
-                </TableCell>
-                <TableCell>
-                  <FormControl>
-                    <Select
-                      value={editedData[product.product_id]?.vat_rate || ''}
-                      onChange={(e) => handleInputChange(product.product_id, 'vat_rate', e.target.value)}
-                      style={{ width: '80px' }}
-                    >
-                      <MenuItem value="0">0%</MenuItem>
-                      <MenuItem value="0.05">5%</MenuItem>
-                      <MenuItem value="0.20">20%</MenuItem>
-                    </Select>
-                  </FormControl>
-                </TableCell>
-                <TableCell>
-                  <FormControl fullWidth>
-                    <Select
-                      value={editedData[product.product_id]?.counter_party || ''}
-                      onChange={(e) => handleInputChange(product.product_id, 'counter_party', e.target.value)}
-                      style={{ width: '120px' }}
-                    >
-                      {suppliers.map((supplier) => (
-                        <MenuItem key={supplier.id} value={supplier.id}>
-                          {supplier.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </TableCell>
-                <TableCell>
-                  <Checkbox
-                    checked={editedData[product.product_id]?.extra_packing_needed || false}
-                    onChange={(e) => handleInputChange(product.product_id, 'extra_packing_needed', e.target.checked)}
-                  />
-                </TableCell>
-                <TableCell>{product.approved_by || 'N/A'}</TableCell>
-                <TableCell>{new Date(product.approved_at).toLocaleString()}</TableCell>
+                {columns.map((column) => (
+                  <TableCell key={column.field}>
+                    {renderEditableCell(item, column)}
+                  </TableCell>
+                ))}
                 <TableCell align="center">
                   <Checkbox
-                    checked={!!selectedProducts[product.product_id]}
-                    onChange={() => handleCheckboxChange(product)}
+                    checked={!!selectedProducts[item.ID]}
+                    onChange={() => handleCheckboxChange(item)}
                     onClick={(e) => e.stopPropagation()}
                   />
                 </TableCell>
@@ -437,21 +469,34 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
       <Dialog open={poDialogOpen} onClose={handlePoDialogClose} maxWidth="md" fullWidth>
         <DialogTitle>Create Purchase Order</DialogTitle>
         <DialogContent>
-        <div style={{ marginTop: '5px' }}>
-          <LocalizationProvider dateAdapter={AdapterDateFns}>
-            <DatePicker
-              label="Expected Delivery Date"
-              value={expectedDeliveryDate}
-              onChange={(newValue) => setExpectedDeliveryDate(newValue)}
-              renderInput={(params) => <TextField {...params} fullWidth margin="normal" />}
-            />
-          </LocalizationProvider>
-        </div>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: '5px', maxWidth: '400px' }}>
+            <LocalizationProvider dateAdapter={AdapterDateFns}>
+              <DatePicker
+                label="Expected Delivery Date"
+                value={expectedDeliveryDate}
+                onChange={(newValue) => setExpectedDeliveryDate(newValue)}
+                renderInput={(params) => <TextField {...params} />}
+              />
+            </LocalizationProvider>
+            <FormControl>
+              <InputLabel>Extra Packing Needed</InputLabel>
+              <Select
+                value={extraPackingNeeded}
+                onChange={(e) => setExtraPackingNeeded(e.target.value)}
+              >
+                {extraPackagingOptions.map(option => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            </Box>
           <List>
             {poDetails.map((item, itemIndex) => (
-              <ListItem key={item.product_id} divider>
+              <ListItem key={item.ID} divider>
                 <ListItemText
-                  primary={item.product_name}
+                  primary={item['Amazon Product Name']}
                   secondary={`Total Quantity: ${item.totalQuantity}`}
                 />
                 <Box>
@@ -492,24 +537,24 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handlePoDialogClose}>Cancel</Button>
-          <Button onClick={handlePoSubmit} color="primary" disabled={!isPoValid}>Create PO</Button>
+          <Button onClick={handlePoSubmit} color="primary" disabled={!isPoValid}>
+            Create PO
+          </Button>
         </DialogActions>
       </Dialog>
 
-
-      
       <Button
-          variant="contained"
-          color="secondary"
-          onClick={handleRemoveItems}
-          startIcon={<DeleteIcon />}
-          disabled={Object.keys(selectedProducts).filter(productId => selectedProducts[productId]).length === 0}
-          sx={{ marginTop: 2 }} // Add margin top
-        >
-          Remove Selected
-        </Button>
+        variant="contained"
+        color="secondary"
+        onClick={handleRemoveItems}
+        startIcon={<DeleteIcon />}
+        disabled={Object.keys(selectedProducts).filter(id => selectedProducts[id]).length === 0}
+        sx={{ marginTop: 2 }}
+      >
+        Remove Selected
+      </Button>
 
-        <Snackbar
+      <Snackbar
         open={snackbarOpen}
         autoHideDuration={6000}
         onClose={() => setSnackbarOpen(false)}
@@ -518,6 +563,37 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
           {snackbarMessage}
         </Alert>
       </Snackbar>
+
+      <Modal
+        open={!!selectedProduct}
+        onClose={handleCloseModal}
+        aria-labelledby="modal-modal-title"
+        aria-describedby="modal-modal-description"
+      >
+        <Box sx={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '90%',
+          maxHeight: '90%',
+          bgcolor: 'background.paper',
+          border: '2px solid #000',
+          boxShadow: 24,
+          overflow: 'auto',
+          p: 4,
+        }}>
+          <Typography id="modal-modal-title" variant="h6" component="h2">
+            Full Product Details
+          </Typography>
+          <Box
+            id="modal-modal-description"
+            sx={{ marginTop: '16px', maxHeight: '80vh', overflow: 'auto' }}
+          >
+            <OrderedJsonViewer data={selectedProduct} />
+          </Box>
+        </Box>
+      </Modal>
     </>
   );
 };

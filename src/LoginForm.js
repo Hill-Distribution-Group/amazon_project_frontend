@@ -11,7 +11,7 @@ const LoginForm = ({ onLoginSuccess }) => {
     e.preventDefault();
     setError('');
     try {
-      const response = await api.post('/login', { username, password });
+      const response = await api.post('/api/auth/login', { username, password });
       if (response.data.message === 'Logged in successfully') {
         // Store tokens in localStorage
         localStorage.setItem('access_token', response.data.access_token);

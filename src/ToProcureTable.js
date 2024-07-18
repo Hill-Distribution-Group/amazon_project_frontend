@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Box, Checkbox, TextField, FormControl, InputLabel, Select,
-  MenuItem, Snackbar, Alert, Dialog, DialogTitle, DialogContent,
+  MenuItem, Dialog, DialogTitle, DialogContent,
   DialogActions, List, ListItem, ListItemText, IconButton, Menu, Tooltip, Button, Modal, Typography
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -12,16 +12,14 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import OrderedJsonViewer from './OrderedJsonViewer';
+import EnhancedFilterSortControls from './EnhancedFilterSortControls';
+import { useSnackbar } from './SnackbarContext';
 
 const ToProcureTable = ({ data, setData, onSaveSelected }) => {
   const [selectedProducts, setSelectedProducts] = useState({});
   const [editedData, setEditedData] = useState({});
-  const [filterText, setFilterText] = useState('');
-  const [sortField, setSortField] = useState('');
-  const [sortDirection, setSortDirection] = useState('asc');
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [snackbarSeverity, setSnackbarSeverity] = useState('info');
+  const [filters, setFilters] = useState({});
+  const [sortConfig, setSortConfig] = useState({ field: '', direction: 'asc' });
   const [poDialogOpen, setPoDialogOpen] = useState(false);
   const [poDetails, setPoDetails] = useState([]);
   const [contextMenu, setContextMenu] = useState(null);
@@ -29,7 +27,9 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [extraPackingNeeded, setExtraPackingNeeded] = useState('');
-
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const { showSnackbar } = useSnackbar();
 
   useEffect(() => {
     setEditedData(data.reduce((acc, item) => ({ ...acc, [item.ID]: { ...item } }), {}));
@@ -49,38 +49,56 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
     }));
   };
 
-  const handleInputChange = async (id, field, value) => {
-    const updatedData = {
-      ...editedData[id],
-      [field]: value
-    };
+  const handleSelectAll = (event) => {
+    const isChecked = event.target.checked;
+    const newSelectedProducts = {};
+    data.forEach((item) => {
+      newSelectedProducts[item.ID] = isChecked;
+    });
+    setSelectedProducts(newSelectedProducts);
+  };
 
-    setEditedData(prev => ({
-      ...prev,
-      [id]: updatedData
-    }));
-
-    // Update the main data array
-    setData(prevData =>
-      prevData.map(item => item.ID === id ? { ...item, [field]: value } : item)
-    );
-
-    try {
-      await api.post('/api/to_procure/update_to_procure_items', { items: [updatedData] });
-      setSnackbarMessage("Changes saved successfully.");
-      setSnackbarSeverity('success');
-      setSnackbarOpen(true);
-
-      if (field === 'Quantity') {
-        setPoDetails([]);
-        setIsPoValid(false);
-      }
-    } catch (error) {
-      console.error('Error saving changes:', error);
-      setSnackbarMessage("Error saving changes. Please try again.");
-      setSnackbarSeverity('error');
-      setSnackbarOpen(true);
+  const handleEdit = () => {
+    if (contextMenu) {
+      setEditingItem({ ...contextMenu.product });
+      setEditDialogOpen(true);
+      handleCloseContextMenu();
     }
+  };
+
+  const handleInputChange = (field, value) => {
+    setEditingItem(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleUpdate = async () => {
+    try {
+      const response = await api.put('/api/to_procure/update_to_procure_item', editingItem);
+      
+      if (response.data.status === "moved_to_saved_results") {
+        setData(prevData => prevData.filter(item => item.ID !== editingItem.ID));
+        showSnackbar("Item moved back to SavedResults due to margin decrease.", 'warning');
+      } else if (response.data.status === "updated") {
+        setData(prevData => prevData.map(item => item.ID === editingItem.ID ? response.data.item : item));
+        showSnackbar("Item updated successfully.", 'success');
+      }
+      
+      setEditDialogOpen(false);
+      setEditingItem(null);
+    } catch (error) {
+      console.error('Error updating item:', error);
+      showSnackbar("Error updating item. Please try again.", 'error');
+    }
+  };
+
+  const handleFilterChange = (newFilters) => {
+    setFilters(newFilters);
+  };
+
+  const handleSortChange = (field, direction) => {
+    setSortConfig({ field, direction });
   };
 
   const handlePoDialogClose = () => {
@@ -163,7 +181,7 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
     setIsPoValid(isValid);
   }, [validatePoDetails, poDetails, expectedDeliveryDate]);
 
-const handleSplitChange = (itemIndex, splitId, field, value) => {
+  const handleSplitChange = (itemIndex, splitId, field, value) => {
     setPoDetails(prevDetails => {
       const newDetails = [...prevDetails];
       const item = newDetails[itemIndex];
@@ -216,16 +234,13 @@ const handleSplitChange = (itemIndex, splitId, field, value) => {
     handlePoDialogClose();
   };
 
-
   const handleRemoveItems = async () => {
     const itemsToRemove = Object.keys(selectedProducts)
       .filter(id => selectedProducts[id])
       .map(id => ({ id: id }));
 
     if (itemsToRemove.length === 0) {
-      setSnackbarMessage("No items selected for removal.");
-      setSnackbarSeverity('warning');
-      setSnackbarOpen(true);
+      showSnackbar("No items selected for removal.", 'warning');
       return;
     }
 
@@ -233,9 +248,7 @@ const handleSplitChange = (itemIndex, splitId, field, value) => {
       const response = await api.post('/api/to_procure/remove_to_procure_items', { items: itemsToRemove });
       
       if (response.status === 200) {
-        setSnackbarMessage(response.data.message);
-        setSnackbarSeverity('success');
-        setSnackbarOpen(true);
+        showSnackbar(response.data.message, 'success');
         
         const updatedData = data.filter(product => !selectedProducts[product.ID]);
         setData(updatedData);
@@ -246,9 +259,7 @@ const handleSplitChange = (itemIndex, splitId, field, value) => {
       }
     } catch (error) {
       console.error('Error removing items:', error);
-      setSnackbarMessage(error.message || "Error removing items. Please try again.");
-      setSnackbarSeverity('error');
-      setSnackbarOpen(true);
+      showSnackbar(error.message || "Error removing items. Please try again.", 'error');
     }
   };
 
@@ -263,56 +274,52 @@ const handleSplitChange = (itemIndex, splitId, field, value) => {
     setSelectedProduct(null);
   };
 
-  const filteredData = useMemo(() => {
-    if (!data || data.length === 0) return [];
-    return data.filter(product =>
-      (product['Amazon Product Name'] || '').toLowerCase().includes(filterText.toLowerCase()) ||
-      (product['ASIN'] || '').toLowerCase().includes(filterText.toLowerCase()) ||
-      (product['Product SKU'] || '').toLowerCase().includes(filterText.toLowerCase())
-    );
-  }, [data, filterText]);
+  const columns = useMemo(() => [
+    { field: 'ASIN', headerName: 'ASIN' },
+    { field: 'Product SKU', headerName: 'SKU' },
+    { field: 'Amazon Product Name', headerName: 'Product Name' },
+    { field: 'Cost of Goods', headerName: 'Cost of Goods', editable: true },
+    { field: 'Quantity', headerName: 'Quantity', editable: true },
+    { field: 'VAT Rate', headerName: 'VAT Rate' },
+    { field: 'Counter Party', headerName: 'Counter Party' },
+    { field: 'Sell Price FBA', headerName: 'Sell Price FBA' },
+    { field: 'Sell Price FBM', headerName: 'Sell Price FBM' },
+    { field: 'Margin FBA', headerName: 'Margin FBA' },
+    { field: 'Margin FBM', headerName: 'Margin FBM' },
+    { field: 'Net Profit FBA', headerName: 'Net Profit FBA' },
+    { field: 'Net Profit FBM', headerName: 'Net Profit FBM' },
+    { field: 'Approved By', headerName: 'Approved By' },
+    { field: 'Approved At', headerName: 'Approved At' },
+    { field: 'Decision', headerName: 'Decision' }
+  ], []);
 
-  const sortedData = useMemo(() => {
-    return [...filteredData].sort((a, b) => {
-      if (sortField) {
-        const aValue = a[sortField];
-        const bValue = b[sortField];
-        if (sortDirection === 'asc') {
-          return aValue > bValue ? 1 : -1;
-        } else {
-          return aValue < bValue ? 1 : -1;
-        }
+  const filteredAndSortedData = useMemo(() => {
+    let result = data;
+
+    // Apply filters
+    Object.entries(filters).forEach(([field, value]) => {
+      if (value) {
+        result = result.filter(item => 
+          String(item[field]).toLowerCase().includes(value.toLowerCase())
+        );
       }
-      return 0;
     });
-  }, [filteredData, sortField, sortDirection]);
 
-  const getDecisionBasedColumns = () => {
-    return [
-      { field: 'ASIN', headerName: 'ASIN' },
-      { field: 'Product SKU', headerName: 'SKU' },
-      { field: 'Amazon Product Name', headerName: 'Product Name' },
-      { field: 'Cost of Goods', headerName: 'Cost of Goods', editable: true },
-      { field: 'Quantity', headerName: 'Quantity', editable: true },
-      { field: 'VAT Rate', headerName: 'VAT Rate', editable: true, type: 'select' },
-      { field: 'Counter Party', headerName: 'Counter Party' },
-      { field: 'Sell Price FBA', headerName: 'Sell Price FBA' },
-      { field: 'Sell Price FBM', headerName: 'Sell Price FBM' },
-      { field: 'Margin FBA', headerName: 'Margin FBA' },
-      { field: 'Margin FBM', headerName: 'Margin FBM' },
-      { field: 'Margin FBA Non Registered', headerName: 'Margin FBA Non Registered' },
-      { field: 'Margin FBM Non Registered', headerName: 'Margin FBM Non Registered' },
-      { field: 'Net Profit FBA', headerName: 'Net Profit FBA' },
-      { field: 'Net Profit FBM', headerName: 'Net Profit FBM' },
-      { field: 'Net Profit FBA Non Registered', headerName: 'Net Profit FBA Non Registered' },
-      { field: 'Net Profit FBM Non Registered', headerName: 'Net Profit FBM Non Registered' },
-      { field: 'Approved By', headerName: 'Approved By' },
-      { field: 'Approved At', headerName: 'Approved At' },
-      { field: 'Decision', headerName: 'Decision' }
-    ];
-  };
+    // Apply sorting
+    if (sortConfig.field) {
+      result.sort((a, b) => {
+        if (a[sortConfig.field] < b[sortConfig.field]) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (a[sortConfig.field] > b[sortConfig.field]) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
 
-  const columns = useMemo(() => getDecisionBasedColumns(), []);
+    return result;
+  }, [data, filters, sortConfig]);
 
   const getHighlightedColumns = (decision) => {
     if (decision.includes('FBA')) {
@@ -322,12 +329,6 @@ const handleSplitChange = (itemIndex, splitId, field, value) => {
     }
     return [];
   };
-
-  const vatRateOptions = [
-    { value: '0', label: '0%' },
-    { value: '0.05', label: '5%' },
-    { value: '0.2', label: '20%' },
-  ];
 
   const extraPackagingOptions = [
     { value: 'None', label: 'None' },
@@ -354,92 +355,61 @@ const handleSplitChange = (itemIndex, splitId, field, value) => {
       );
     }
 
-    if (column.type === 'select') {
-      const options = column.field === 'VAT Rate' ? vatRateOptions : [];
-      return (
-        <FormControl fullWidth onClick={(e) => e.stopPropagation()} style={cellStyle}>
-          <Select
-            value={value}
-            onChange={(e) => handleInputChange(item.ID, column.field, e.target.value)}
-          >
-            {options.map((option) => (
-              <MenuItem key={option.value} value={option.value}>
-                {option.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      );
-    } else if (column.editable) {
-      return (
-        <TextField
-          value={value}
-          onChange={(e) => handleInputChange(item.ID, column.field, e.target.value)}
-          type={column.field === 'Quantity' ? 'number' : 'text'}
-          InputProps={{ style: { ...cellStyle, width: column.field === 'Quantity' ? '80px' : '100px' } }}
-          onClick={(e) => e.stopPropagation()}
-        />
-      );
-    } else {
-      return <span style={cellStyle}>{value}</span>;
+    if (column.field === 'VAT Rate') {
+      // Display VAT Rate as a percentage
+      const percentage = (parseFloat(value) * 100).toFixed(0) + '%';
+      return <span style={cellStyle}>{percentage}</span>;
     }
+
+    return <span style={cellStyle}>{value}</span>;
   };
 
   return (
     <>
-      <Box display="flex" justifyContent="space-between" mb={2}>
-        <TextField
-          label="Filter by Name, ASIN, or SKU"
-          value={filterText}
-          onChange={(e) => setFilterText(e.target.value)}
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <EnhancedFilterSortControls
+          columns={columns}
+          onFilterChange={handleFilterChange}
+          onSortChange={handleSortChange}
         />
-        <FormControl>
-          <InputLabel>Sort By</InputLabel>
-          <Select
-            value={sortField}
-            onChange={(e) => setSortField(e.target.value)}
+        <Box display="flex" gap={1}>
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={handleRemoveItems}
+            startIcon={<DeleteIcon />}
+            disabled={Object.keys(selectedProducts).filter(id => selectedProducts[id]).length === 0}
+            sx={{ padding: '6px 12px' }}
           >
-            <MenuItem value=""><em>None</em></MenuItem>
-            <MenuItem value="Cost of Goods">Cost of Goods</MenuItem>
-            <MenuItem value="Sell Price FBA">Sell Price FBA</MenuItem>
-            <MenuItem value="Sell Price FBM">Sell Price FBM</MenuItem>
-            <MenuItem value="Quantity">Quantity</MenuItem>
-          </Select>
-        </FormControl>
-        <FormControl>
-          <InputLabel>Sort Direction</InputLabel>
-          <Select
-            value={sortDirection}
-            onChange={(e) => setSortDirection(e.target.value)}
-          >
-            <MenuItem value="asc">Ascending</MenuItem>
-            <MenuItem value="desc">Descending</MenuItem>
-          </Select>
-        </FormControl>
+            Remove Selected
+          </Button>
+        </Box>
       </Box>
-      <TableContainer component={Paper}>
+      
+      <TableContainer component={Paper} sx={{ minHeight: '400px' }}>
         <Table>
           <TableHead>
             <TableRow>
+              <TableCell align="center">
+                <Checkbox
+                  indeterminate={Object.values(selectedProducts).some(Boolean) && Object.values(selectedProducts).some(value => !value)}
+                  checked={Object.values(selectedProducts).every(Boolean)}
+                  onChange={handleSelectAll}
+                />
+              </TableCell>
               {columns.map((column) => (
                 <TableCell key={column.field}>{column.headerName}</TableCell>
               ))}
-              <TableCell align="center">Select</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {sortedData.map((item) => (
+            {filteredAndSortedData.map((item) => (
               <TableRow
                 key={item.ID}
                 onClick={(event) => handleRowClick(event, item)}
                 onContextMenu={(event) => handleContextMenu(event, item)}
                 style={{ cursor: 'pointer' }}
               >
-                {columns.map((column) => (
-                  <TableCell key={column.field}>
-                    {renderEditableCell(item, column)}
-                  </TableCell>
-                ))}
                 <TableCell align="center">
                   <Checkbox
                     checked={!!selectedProducts[item.ID]}
@@ -447,6 +417,11 @@ const handleSplitChange = (itemIndex, splitId, field, value) => {
                     onClick={(e) => e.stopPropagation()}
                   />
                 </TableCell>
+                {columns.map((column) => (
+                  <TableCell key={column.field}>
+                    {renderEditableCell(item, column)}
+                  </TableCell>
+                ))}
               </TableRow>
             ))}
           </TableBody>
@@ -463,8 +438,35 @@ const handleSplitChange = (itemIndex, splitId, field, value) => {
             : undefined
         }
       >
+        <MenuItem onClick={handleEdit}>Edit Item</MenuItem>
         <MenuItem onClick={handleCreatePO}>Create Purchase Order</MenuItem>
       </Menu>
+
+      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="md"  >
+        <DialogTitle>Edit Item</DialogTitle>
+        <DialogContent>
+          {editingItem && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+              <TextField
+                label="Cost of Goods"
+                type="number"
+                value={editingItem['Cost of Goods']}
+                onChange={(e) => handleInputChange('Cost of Goods', e.target.value)}
+              />
+              <TextField
+                label="Quantity"
+                type="number"
+                value={editingItem.Quantity}
+                onChange={(e) => handleInputChange('Quantity', e.target.value)}
+              />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleUpdate} color="primary">Update</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={poDialogOpen} onClose={handlePoDialogClose} maxWidth="md" fullWidth>
         <DialogTitle>Create Purchase Order</DialogTitle>
@@ -491,7 +493,7 @@ const handleSplitChange = (itemIndex, splitId, field, value) => {
                 ))}
               </Select>
             </FormControl>
-            </Box>
+          </Box>
           <List>
             {poDetails.map((item, itemIndex) => (
               <ListItem key={item.ID} divider>
@@ -542,27 +544,6 @@ const handleSplitChange = (itemIndex, splitId, field, value) => {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Button
-        variant="contained"
-        color="secondary"
-        onClick={handleRemoveItems}
-        startIcon={<DeleteIcon />}
-        disabled={Object.keys(selectedProducts).filter(id => selectedProducts[id]).length === 0}
-        sx={{ marginTop: 2 }}
-      >
-        Remove Selected
-      </Button>
-
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={6000}
-        onClose={() => setSnackbarOpen(false)}
-      >
-        <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} elevation={6} variant="filled">
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
 
       <Modal
         open={!!selectedProduct}

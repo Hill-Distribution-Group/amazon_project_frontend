@@ -1,6 +1,7 @@
+// LoginForm.js
 import React, { useState } from 'react';
 import { TextField, Button, Box, Typography } from '@mui/material';
-import api from './api'; // Import the configured Axios instance
+import api from './api';
 
 const LoginForm = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
@@ -13,18 +14,15 @@ const LoginForm = ({ onLoginSuccess }) => {
     try {
       const response = await api.post('/api/auth/login', { username, password });
       if (response.data.message === 'Logged in successfully') {
-        // Store tokens in localStorage
         localStorage.setItem('access_token', response.data.access_token);
         localStorage.setItem('refresh_token', response.data.refresh_token);
-        // Update the Authorization header for future requests
         api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
-        console.log('Login Success - Access Token:', response.data.access_token);  // Debugging
         onLoginSuccess();
       } else {
-        console.error('Login error: Invalid response', response.data);  // Debugging
+        console.error('Login error: Invalid response', response.data);
       }
     } catch (error) {
-      console.error('Login error:', error);  // Debugging
+      console.error('Login error:', error);
       setError('Invalid username or password. Please try again.');
     }
   };

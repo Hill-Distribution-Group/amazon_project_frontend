@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -23,6 +23,7 @@ import {
   FormControl,
   InputLabel,
   Tooltip,
+  ThemeProvider
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -32,6 +33,15 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import api from './api';
 import { useSnackbar } from './SnackbarContext';
+import theme, { 
+  PageContainer, 
+  ContentContainer, 
+  ResultsContainer, 
+  StyledHeader,
+  HeaderTitle,
+  HeaderActions
+} from './themes/globalTheme';
+import EnhancedFilterSortControls from './EnhancedFilterSortControls';
 
 const PurchaseOrders = () => {
   const availableSalesChannels = [
@@ -58,12 +68,22 @@ const PurchaseOrders = () => {
     items: [],
   });
   const [selectedPOs, setSelectedPOs] = useState({});
+  const [filters, setFilters] = useState({});
+  const [sortConfig, setSortConfig] = useState({ field: '', direction: 'asc' });
 
   const truncateText = (text, maxLength) => {
     if (text && text.length > maxLength) {
       return text.substring(0, maxLength) + '...';
     }
     return text || '';
+  };
+
+  const handleFilterChange = (newFilters) => {
+    setFilters(newFilters);
+  };
+
+  const handleSortChange = (field, direction) => {
+    setSortConfig({ field, direction });
   };
 
   const extraPackagingOptions = [
@@ -80,7 +100,6 @@ const PurchaseOrders = () => {
     } catch (error) {
       console.error('Error fetching purchase orders:', error);
       setError('Failed to load purchase orders. Please try again later.');
-    } finally {
     }
   }, []);
 
@@ -372,6 +391,51 @@ const PurchaseOrders = () => {
     }
   };
 
+  const columns = useMemo(() => [
+    { field: 'po_number', headerName: 'PO Number' },
+    { field: 'supplier.name', headerName: 'Supplier' },
+    { field: 'order_date', headerName: 'Order Date' },
+    { field: 'expected_delivery_date', headerName: 'Expected Delivery' },
+    { field: 'status', headerName: 'Status' },
+    { field: 'total_amount', headerName: 'Total Amount' },
+  ], []);
+
+  const filteredAndSortedPurchaseOrders = useMemo(() => {
+    let result = purchaseOrders;
+
+    // Apply filters
+    Object.entries(filters).forEach(([field, value]) => {
+      if (value) {
+        result = result.filter(po => {
+          const fieldValue = field.includes('.') ? field.split('.').reduce((obj, key) => obj && obj[key], po) : po[field];
+          return String(fieldValue).toLowerCase().includes(value.toLowerCase());
+        });
+      }
+    });
+
+    // Apply sorting
+    if (sortConfig.field) {
+      result.sort((a, b) => {
+        const aValue = sortConfig.field.includes('.') ? 
+          sortConfig.field.split('.').reduce((obj, key) => obj && obj[key], a) : 
+          a[sortConfig.field];
+        const bValue = sortConfig.field.includes('.') ? 
+          sortConfig.field.split('.').reduce((obj, key) => obj && obj[key], b) : 
+          b[sortConfig.field];
+
+        if (aValue < bValue) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+
+    return result;
+  }, [purchaseOrders, filters, sortConfig]);
+
   if (error) {
     return (
       <Box width="100%">
@@ -383,368 +447,382 @@ const PurchaseOrders = () => {
   }
 
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom>
-        Purchase Orders
-      </Typography>
+    <ThemeProvider theme={theme}>
+      <PageContainer>
+        <StyledHeader>
+          <Box sx={{ width: '33%' }} /> {/* Left spacer */}
+          <HeaderTitle variant="h5" component="h1" color="textPrimary">
+            Purchase Orders
+          </HeaderTitle>
+          <HeaderActions>
+            {/* Add your header buttons here if needed */}
+          </HeaderActions>
+        </StyledHeader>
+        <ContentContainer>
+          <ResultsContainer>
+            <Box display="flex" justifyContent="space-between" mb={2}>
+              <EnhancedFilterSortControls
+                columns={columns}
+                onFilterChange={handleFilterChange}
+                onSortChange={handleSortChange}
+              />
+              <Box display="flex" alignItems="center">
+                <Button
+                  variant="contained"
+                  startIcon={<AddCircleOutlineIcon />}
+                  onClick={handleOpenDialog}
+                  sx={{ marginRight: '1rem' }}
+                >
+                  Create New PO
+                </Button>
+                <Button
+                  variant="contained"
+                  color="error"
+                  onClick={handleRemoveSelectedPOs}
+                  disabled={Object.values(selectedPOs).filter(Boolean).length === 0}
+                >
+                  Remove Selected
+                </Button>
+              </Box>
+            </Box>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>PO Number</TableCell>
-              <TableCell>Supplier</TableCell>
-              <TableCell>Order Date</TableCell>
-              <TableCell>Expected Delivery</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Total Amount</TableCell>
-              <TableCell>Actions</TableCell>
-              <TableCell padding="checkbox">
-                <Checkbox
-                  indeterminate={
-                    Object.values(selectedPOs).some(Boolean) &&
-                    !Object.values(selectedPOs).every(Boolean)
-                  }
-                  checked={Object.values(selectedPOs).every(Boolean)}
-                  onChange={(e) => {
-                    const allChecked = e.target.checked;
-                    setSelectedPOs(
-                      purchaseOrders.reduce(
-                        (newSelected, po) => ({
-                          ...newSelected,
-                          [po.id]: allChecked,
-                        }),
-                        {}
-                      )
-                    );
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {purchaseOrders.map((po) => (
-              <TableRow key={po.id} hover onClick={() => handleRowClick(po)}>
-                <TableCell>{po.po_number}</TableCell>
-                <TableCell>{po.supplier.name}</TableCell>
-                <TableCell>
-                  {new Date(po.order_date).toLocaleDateString()}
-                </TableCell>
-                <TableCell>
-                  {po.expected_delivery_date
-                    ? new Date(po.expected_delivery_date).toLocaleDateString()
-                    : 'N/A'}
-                </TableCell>
-                <TableCell>
-                  <FormControl fullWidth>
-                    <InputLabel id={`status-label-${po.id}`}>Status</InputLabel>
-                    <Select
-                      labelId={`status-label-${po.id}`}
-                      id={`status-select-${po.id}`}
-                      value={po.status}
-                      label="Status"
-                      onChange={async (e) => {
-                        try {
-                          const newStatus = e.target.value;
-                          await api.put(
-                            `/api/purchase_orders/update_po/${po.id}`,
-                            { status: newStatus }
-                          );
-                          await fetchPurchaseOrders();
-                          showSnackbar(
-                            `Purchase order status updated to ${newStatus}`,
-                            'success'
-                          );
-                        } catch (error) {
-                          console.error(
-                            'Error updating purchase order status:',
-                            error
-                          );
-                          showSnackbar(
-                            'Failed to update purchase order status.',
-                            'error'
-                          );
+            <TableContainer component={Paper} sx={{ maxHeight: '600px' }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                  <TableCell padding="checkbox">
+                      <Checkbox
+                        indeterminate={
+                          Object.values(selectedPOs).some(Boolean) &&
+                          !Object.values(selectedPOs).every(Boolean)
                         }
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <MenuItem value="Draft">Draft</MenuItem>
-                      <MenuItem value="Pending">Pending</MenuItem>
-                      <MenuItem value="Approved">Approved</MenuItem>
-                      <MenuItem value="Shipped">Shipped</MenuItem>
-                      <MenuItem value="Received">Received</MenuItem>
-                    </Select>
-                  </FormControl>
-                </TableCell>
-                <TableCell>£{po.total_amount.toFixed(2)}</TableCell>
-                <TableCell>
-                  <IconButton
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditPO(po);
-                    }}
-                  >
-                    <EditIcon />
-                  </IconButton>
-                </TableCell>
-                <TableCell padding="checkbox">
-                  <Checkbox
-                    checked={!!selectedPOs[po.id]}
-                    onChange={() => handlePOCheckboxChange(po.id)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      <Box mt={2}>
-        <Button
-          variant="contained"
-          startIcon={<AddCircleOutlineIcon />}
-          onClick={handleOpenDialog}
-          sx={{ marginRight: '1rem' }}
-        >
-          Create New PO
-        </Button>
-
-        <Button
-          variant="contained"
-          color="error"
-          onClick={handleRemoveSelectedPOs}
-          disabled={Object.values(selectedPOs).filter(Boolean).length === 0}
-        >
-          Remove Selected
-        </Button>
-      </Box>
-
-      <Dialog open={openDialog} onClose={handleCloseDialog} fullWidth maxWidth="xl">
-        <DialogTitle>{isEditing ? 'Edit Purchase Order' : 'Create Purchase Order'}</DialogTitle>
-        <DialogContent>
-          <FormControl fullWidth margin="normal">
-            <InputLabel>Supplier</InputLabel>
-            <Select
-              value={poData.supplier ? poData.supplier.id : ''}
-              onChange={(e) =>
-                setPOData({
-                  ...poData,
-                  supplier: suppliers.find((s) => s.id === e.target.value),
-                })
-              }
-            >
-              {suppliers.map((supplier) => (
-                <MenuItem key={supplier.id} value={supplier.id}>
-                  {supplier.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <LocalizationProvider dateAdapter={AdapterDateFns}>
-            <DatePicker
-              label="Expected Delivery Date"
-              value={poData.expectedDeliveryDate}
-              onChange={(newValue) =>
-                setPOData({ ...poData, expectedDeliveryDate: newValue })
-              }
-              renderInput={(params) => (
-                <TextField {...params} fullWidth margin="normal" />
-              )}
-              format="dd/MM/yyyy"
-            />
-          </LocalizationProvider>
-
-          <TableContainer component={Paper} style={{ marginTop: '1rem' }}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Product ID</TableCell>
-                  <TableCell>Quantity</TableCell>
-                  <TableCell>Unit Cost</TableCell>
-                  <TableCell>Extra Packaging</TableCell>
-                  {availableSalesChannels.map((channel) => (
-                    <TableCell key={channel}>{channel} Split</TableCell>
-                  ))}
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {poData.items.map((item, index) => (
-                  <TableRow key={index}>
-                    <TableCell>
-                      <TextField
-                        value={item.product_id}
-                        onChange={(e) =>
-                          handleInputChange(index, 'product_id', e.target.value)
-                        }
-                        fullWidth
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        type="number"
-                        value={item.quantity}
-                        onChange={(e) =>
-                          handleInputChange(
-                            index,
-                            'quantity',
-                            parseInt(e.target.value, 10) || 0
-                          )
-                        }
-                        fullWidth
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        type="number"
-                        value={item.unit_cost}
-                        onChange={(e) =>
-                          handleInputChange(
-                            index,
-                            'unit_cost',
-                            parseFloat(e.target.value) || 0
-                          )
-                        }
-                        fullWidth
-                        InputProps={{
-                          startAdornment: (
-                            <InputAdornment position="start">£</InputAdornment>
-                          ),
+                        checked={Object.values(selectedPOs).every(Boolean)}
+                        onChange={(e) => {
+                          const allChecked = e.target.checked;
+                          setSelectedPOs(
+                            filteredAndSortedPurchaseOrders.reduce(
+                              (newSelected, po) => ({
+                                ...newSelected,
+                                [po.id]: allChecked,
+                              }),
+                              {}
+                            )
+                          );
                         }}
+                        onClick={(e) => e.stopPropagation()}
                       />
                     </TableCell>
-                    <TableCell>
-                      <FormControl fullWidth>
-                        <Select
-                          value={item.extra_packing_needed}
-                          onChange={(e) =>
-                            handleInputChange(
-                              index,
-                              'extra_packing_needed',
-                              e.target.value
-                            )
-                          }
-                        >
-                          {extraPackagingOptions.map((option) => (
-                            <MenuItem key={option.value} value={option.value}>
-                              {option.label}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </TableCell>
-                    {availableSalesChannels.map((channel) => (
-                      <TableCell key={channel}>
-                        <TextField
-                          type="number"
-                          value={item.sales_channel_split[channel] || 0}
-                          onChange={(e) =>
-                            handleSplitChange(
-                              index,
-                              channel,
-                              parseInt(e.target.value, 10) || 0
-                            )
-                          }
-                          fullWidth
+                    {columns.map(column => (
+                      <TableCell key={column.field}>{column.headerName}</TableCell>
+                    ))}
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredAndSortedPurchaseOrders.map((po) => (
+                    <TableRow key={po.id} hover onClick={() => handleRowClick(po)}>
+                                            <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={!!selectedPOs[po.id]}
+                          onChange={() => handlePOCheckboxChange(po.id)}
+                          onClick={(e) => e.stopPropagation()}
                         />
                       </TableCell>
-                    ))}
-                    <TableCell>
-                      <IconButton onClick={() => handleDeleteItem(index)}>
-                        <DeleteIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <Button variant="outlined" onClick={handleAddItem} sx={{ marginTop: '1rem' }}>
-            Add Item
-          </Button>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          {isEditing ? (
-            <Button onClick={handleUpdatePurchaseOrder} color="primary">
-              Update PO
-            </Button>
-          ) : (
-            <Button onClick={handleCreatePurchaseOrder} color="primary">
-              Create PO
-            </Button>
-          )}
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={!!selectedPO} onClose={handleClosePODialog} fullWidth maxWidth="xl">
-        {selectedPO && (
-          <>
-            <DialogTitle>Purchase Order Details - {selectedPO.po_number}</DialogTitle>
-            <DialogContent>
-              <Typography variant="subtitle1" gutterBottom>
-                Supplier: {selectedPO.supplier.name}
-              </Typography>
-              <Typography variant="subtitle1" gutterBottom>
-                Order Date: {new Date(selectedPO.order_date).toLocaleDateString()}
-              </Typography>
-              <Typography variant="subtitle1" gutterBottom>
-                Expected Delivery:{' '}
-                {selectedPO.expected_delivery_date
-                  ? new Date(selectedPO.expected_delivery_date).toLocaleDateString()
-                  : 'N/A'}
-              </Typography>
-              <Typography variant="subtitle1" gutterBottom>
-                Status: {selectedPO.status}
-              </Typography>
-
-              <TableContainer component={Paper} sx={{ marginTop: '1rem' }}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Product Name</TableCell>
-                      <TableCell>Quantity</TableCell>
-                      <TableCell>Unit Cost</TableCell>
-                      <TableCell>Total Amount</TableCell>
-                      <TableCell>Extra Packaging</TableCell>
-                      {availableSalesChannels.map((channel) => (
-                        <TableCell key={channel}>{channel} Split</TableCell>
-                      ))}
+                      <TableCell>{po.po_number}</TableCell>
+                      <TableCell>{po.supplier.name}</TableCell>
+                      <TableCell>
+                        {new Date(po.order_date).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        {po.expected_delivery_date
+                          ? new Date(po.expected_delivery_date).toLocaleDateString()
+                          : 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        <FormControl fullWidth>
+                          <InputLabel id={`status-label-${po.id}`}>Status</InputLabel>
+                          <Select
+                            labelId={`status-label-${po.id}`}
+                            id={`status-select-${po.id}`}
+                            value={po.status}
+                            label="Status"
+                            onChange={async (e) => {
+                              try {
+                                const newStatus = e.target.value;
+                                await api.put(
+                                  `/api/purchase_orders/update_po/${po.id}`,
+                                  { status: newStatus }
+                                );
+                                await fetchPurchaseOrders();
+                                showSnackbar(
+                                  `Purchase order status updated to ${newStatus}`,
+                                  'success'
+                                );
+                              } catch (error) {
+                                console.error(
+                                  'Error updating purchase order status:',
+                                  error
+                                );
+                                showSnackbar(
+                                  'Failed to update purchase order status.',
+                                  'error'
+                                );
+                              }
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MenuItem value="Draft">Draft</MenuItem>
+                            <MenuItem value="Pending">Pending</MenuItem>
+                            <MenuItem value="Approved">Approved</MenuItem>
+                            <MenuItem value="Shipped">Shipped</MenuItem>
+                            <MenuItem value="Received">Received</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </TableCell>
+                      <TableCell>£{po.total_amount.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <IconButton
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditPO(po);
+                          }}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                      </TableCell>
                     </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {selectedPO.items.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell>
-                          <Tooltip title={item.product.name}>
-                            <span>{truncateText(item.product.name, 30)}</span>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell>{item.quantity}</TableCell>
-                        <TableCell>£{item.unit_price.toFixed(2)}</TableCell>
-                        <TableCell>£{(item.unit_price * item.quantity).toFixed(2)}</TableCell>
-                        <TableCell>{item.extra_packing_needed}</TableCell>
-                        {availableSalesChannels.map((channel) => (
-                          <TableCell key={channel}>
-                            {item.sales_channel_split[channel] || 0}
-                          </TableCell>
-                        ))}
-                      </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            <Dialog open={openDialog} onClose={handleCloseDialog} fullWidth maxWidth="xl">
+              <DialogTitle>{isEditing ? 'Edit Purchase Order' : 'Create Purchase Order'}</DialogTitle>
+              <DialogContent>
+                <FormControl fullWidth margin="normal">
+                  <InputLabel>Supplier</InputLabel>
+                  <Select
+                    value={poData.supplier ? poData.supplier.id : ''}
+                    onChange={(e) =>
+                      setPOData({
+                        ...poData,
+                        supplier: suppliers.find((s) => s.id === e.target.value),
+                      })
+                    }
+                  >
+                    {suppliers.map((supplier) => (
+                      <MenuItem key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </MenuItem>
                     ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={handleClosePODialog}>Close</Button>
-            </DialogActions>
-          </>
-        )}
-      </Dialog>
-    </Box>
+                  </Select>
+                </FormControl>
+
+                <LocalizationProvider dateAdapter={AdapterDateFns}>
+                  <DatePicker
+                    label="Expected Delivery Date"
+                    value={poData.expectedDeliveryDate}
+                    onChange={(newValue) =>
+                      setPOData({ ...poData, expectedDeliveryDate: newValue })
+                    }
+                    renderInput={(params) => (
+                      <TextField {...params} fullWidth margin="normal" />
+                    )}
+                    format="dd/MM/yyyy"
+                  />
+                </LocalizationProvider>
+
+                <TableContainer component={Paper} style={{ marginTop: '1rem' }}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Product ID</TableCell>
+                        <TableCell>Quantity</TableCell>
+                        <TableCell>Unit Cost</TableCell>
+                        <TableCell>Extra Packaging</TableCell>
+                        {availableSalesChannels.map((channel) => (
+                          <TableCell key={channel}>{channel} Split</TableCell>
+                        ))}
+                        <TableCell>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {poData.items.map((item, index) => (
+                        <TableRow key={index}>
+                          <TableCell>
+                            <TextField
+                              value={item.product_id}
+                              onChange={(e) =>
+                                handleInputChange(index, 'product_id', e.target.value)
+                              }
+                              fullWidth
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) =>
+                                handleInputChange(
+                                  index,
+                                  'quantity',
+                                  parseInt(e.target.value, 10) || 0
+                                )
+                              }
+                              fullWidth
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              type="number"
+                              value={item.unit_cost}
+                              onChange={(e) =>
+                                handleInputChange(
+                                  index,
+                                  'unit_cost',
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                              fullWidth
+                              InputProps={{
+                                startAdornment: (
+                                  <InputAdornment position="start">£</InputAdornment>
+                                ),
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <FormControl fullWidth>
+                              <Select
+                                value={item.extra_packing_needed}
+                                onChange={(e) =>
+                                  handleInputChange(
+                                    index,
+                                    'extra_packing_needed',
+                                    e.target.value
+                                  )
+                                }
+                              >
+                                {extraPackagingOptions.map((option) => (
+                                  <MenuItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </TableCell>
+                          {availableSalesChannels.map((channel) => (
+                            <TableCell key={channel}>
+                              <TextField
+                                type="number"
+                                value={item.sales_channel_split[channel] || 0}
+                                onChange={(e) =>
+                                  handleSplitChange(
+                                    index,
+                                    channel,
+                                    parseInt(e.target.value, 10) || 0
+                                  )
+                                }
+                                fullWidth
+                              />
+                            </TableCell>
+                          ))}
+                          <TableCell>
+                            <IconButton onClick={() => handleDeleteItem(index)}>
+                              <DeleteIcon />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                <Button variant="outlined" onClick={handleAddItem} sx={{ marginTop: '1rem' }}>
+                  Add Item
+                </Button>
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={handleCloseDialog}>Cancel</Button>
+                {isEditing ? (
+                  <Button onClick={handleUpdatePurchaseOrder} color="primary">
+                    Update PO
+                  </Button>
+                ) : (
+                  <Button onClick={handleCreatePurchaseOrder} color="primary">
+                    Create PO
+                  </Button>
+                )}
+              </DialogActions>
+            </Dialog>
+
+            <Dialog open={!!selectedPO} onClose={handleClosePODialog} fullWidth maxWidth="xl">
+              {selectedPO && (
+                <>
+                  <DialogTitle>Purchase Order Details - {selectedPO.po_number}</DialogTitle>
+                  <DialogContent>
+                    <Typography variant="subtitle1" gutterBottom>
+                      Supplier: {selectedPO.supplier.name}
+                    </Typography>
+                    <Typography variant="subtitle1" gutterBottom>
+                      Order Date: {new Date(selectedPO.order_date).toLocaleDateString()}
+                    </Typography>
+                    <Typography variant="subtitle1" gutterBottom>
+                      Expected Delivery:{' '}
+                      {selectedPO.expected_delivery_date
+                        ? new Date(selectedPO.expected_delivery_date).toLocaleDateString()
+                        : 'N/A'}
+                    </Typography>
+                    <Typography variant="subtitle1" gutterBottom>
+                      Status: {selectedPO.status}
+                    </Typography>
+
+                    <TableContainer component={Paper} sx={{ marginTop: '1rem' }}>
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Product Name</TableCell>
+                            <TableCell>Quantity</TableCell>
+                            <TableCell>Unit Cost</TableCell>
+                            <TableCell>Total Amount</TableCell>
+                            <TableCell>Extra Packaging</TableCell>
+                            {availableSalesChannels.map((channel) => (
+                              <TableCell key={channel}>{channel} Split</TableCell>
+                            ))}
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {selectedPO.items.map((item) => (
+                            <TableRow key={item.id}>
+                              <TableCell>
+                                <Tooltip title={item.product.name}>
+                                  <span>{truncateText(item.product.name, 30)}</span>
+                                </Tooltip>
+                              </TableCell>
+                              <TableCell>{item.quantity}</TableCell>
+                              <TableCell>£{item.unit_price.toFixed(2)}</TableCell>
+                              <TableCell>£{(item.unit_price * item.quantity).toFixed(2)}</TableCell>
+                              <TableCell>{item.extra_packing_needed}</TableCell>
+                              {availableSalesChannels.map((channel) => (
+                                <TableCell key={channel}>
+                                  {item.sales_channel_split[channel] || 0}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </DialogContent>
+                  <DialogActions>
+                    <Button onClick={handleClosePODialog}>Close</Button>
+                  </DialogActions>
+                </>
+              )}
+            </Dialog>
+          </ResultsContainer>
+        </ContentContainer>
+      </PageContainer>
+    </ThemeProvider>
   );
 };
 

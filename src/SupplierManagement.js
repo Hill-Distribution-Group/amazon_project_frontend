@@ -1,29 +1,35 @@
-import React, { useState, useEffect,useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Container,
-  Typography,
-  Paper,
   TableContainer,
   Table,
   TableHead,
   TableRow,
   TableCell,
   TableBody,
-  Button,
   TextField,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Grid,
-  Box,
   IconButton,
+  Paper
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import api from './api';
 import { useSnackbar } from './SnackbarContext';
+import {
+  PageContainer,
+  ContentContainer,
+  ResultsContainer,
+  StyledHeader,
+  HeaderTitle,
+  HeaderActions,
+  StyledButton
+} from './themes/globalTheme';
+import EnhancedFilterSortControls from './EnhancedFilterSortControls';
 
 const SupplierManagement = () => {
   const [suppliers, setSuppliers] = useState([]);
@@ -42,6 +48,9 @@ const SupplierManagement = () => {
   const [userLogin, setUserLogin] = useState('');
   const [userPassword, setUserPassword] = useState('');
   const { showSnackbar } = useSnackbar();
+
+  const [filters, setFilters] = useState({});
+  const [sortConfig, setSortConfig] = useState({ field: '', direction: 'asc' });
 
   const fetchSuppliers = useCallback(async () => {
     try {
@@ -95,6 +104,11 @@ const SupplierManagement = () => {
   };
 
   const handleSubmit = async () => {
+    if (!supplierName.trim() || !contactNumber.trim() || !purchaseEmail.trim() || !administrationEmail.trim() || !contactNumberExt.trim() || !type.trim() || !products.trim() || !minimumOrderSize.trim() || !website.trim() || !userLogin.trim() || !userPassword.trim()) {
+      showSnackbar('All fields are required!', 'error');
+      return;
+    }
+
     const supplierData = {
       name: supplierName,
       contact_number: contactNumber,
@@ -110,10 +124,6 @@ const SupplierManagement = () => {
     };
 
     try {
-      if (dialogMode === 'add' && !supplierName.trim()) {
-        showSnackbar('Supplier name is required!', 'error');
-        return;
-      }
       if (dialogMode === 'add') {
         const response = await api.post('/api/suppliers', supplierData);
         setSuppliers([...suppliers, response.data]);
@@ -144,187 +154,242 @@ const SupplierManagement = () => {
     }
   };
 
+  const handleFilterChange = (newFilters) => {
+    setFilters(newFilters);
+  };
+
+  const handleSortChange = (field, direction) => {
+    setSortConfig({ field, direction });
+  };
+
+  const columns = useMemo(() => [
+    { field: 'name', headerName: 'Name' },
+    { field: 'contact_number', headerName: 'Contact Number' },
+    { field: 'purchase_email', headerName: 'Purchase Email' },
+    { field: 'administration_email', headerName: 'Administration Email' },
+    { field: 'type', headerName: 'Type' },
+    { field: 'products', headerName: 'Products' },
+    { field: 'minimum_order_size', headerName: 'Minimum Order Size' },
+    { field: 'website', headerName: 'Website' },
+  ], []);
+
+  const filteredAndSortedSuppliers = useMemo(() => {
+    let result = suppliers;
+
+    // Apply filters
+    Object.entries(filters).forEach(([field, value]) => {
+      if (value) {
+        result = result.filter(supplier => 
+          String(supplier[field]).toLowerCase().includes(value.toLowerCase())
+        );
+      }
+    });
+
+    // Apply sorting
+    if (sortConfig.field) {
+      result.sort((a, b) => {
+        if (a[sortConfig.field] < b[sortConfig.field]) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (a[sortConfig.field] > b[sortConfig.field]) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+
+    return result;
+  }, [suppliers, filters, sortConfig]);
+
   return (
-    <Container maxWidth={false} sx={{ mt: 2, mb: 2, px: { xs: 1, sm: 2, md: 3 } }}>
-      <Typography variant="h4" gutterBottom>
-        Supplier Management
-      </Typography>
-
-      <Box display="flex" justifyContent="flex-end" mb={2}>
-        <Button
-          variant="contained"
-          startIcon={<AddCircleOutlineIcon />}
-          onClick={() => handleOpenDialog('add')}
-        >
-          Add Supplier
-        </Button>
-      </Box>
-
-      <TableContainer component={Paper} sx={{ maxHeight: 'calc(100vh - 200px)' }}>
-      <Table stickyHeader size="small">
-      <TableHead>
-            <TableRow>
-              <TableCell>Name</TableCell>
-              <TableCell>Contact Number</TableCell>
-              <TableCell>Purchase Email</TableCell>
-              <TableCell>Administration Email</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell>Products</TableCell>
-              <TableCell>Minimum Order Size</TableCell>
-              <TableCell>Website</TableCell>
-              <TableCell>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {suppliers.map(supplier => (
-              <TableRow key={supplier.id}>
-                <TableCell>{supplier.name}</TableCell>
-                <TableCell>{supplier.contact_number}</TableCell>
-                <TableCell>{supplier.purchase_email}</TableCell>
-                <TableCell>{supplier.administration_email}</TableCell>
-                <TableCell>{supplier.type}</TableCell>
-                <TableCell>{supplier.products}</TableCell>
-                <TableCell>{supplier.minimum_order_size}</TableCell>
-                <TableCell>{supplier.website}</TableCell>
-                <TableCell>
-                  <IconButton onClick={() => handleOpenDialog('edit', supplier)}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton onClick={() => handleDelete(supplier.id)}>
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-      <DialogTitle>{dialogMode === 'add' ? 'Add Supplier' : 'Edit Supplier'}</DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2}>
-            <Grid item xs={12}>
-              <TextField
-                autoFocus
-                margin="dense"
-                label="Name"
-                type="text"
-                fullWidth
-                value={supplierName}
-                onChange={(e) => setSupplierName(e.target.value)}
-              />
+    <PageContainer>
+      <ContentContainer>
+        <StyledHeader>
+          <HeaderTitle variant="h5" component="h1" color="textPrimary">
+            Supplier Management
+          </HeaderTitle>
+          <HeaderActions>
+            <StyledButton
+              startIcon={<AddCircleOutlineIcon />}
+              onClick={() => handleOpenDialog('add')}
+            >
+              Add Supplier
+            </StyledButton>
+          </HeaderActions>
+        </StyledHeader>
+        <ResultsContainer>
+          <EnhancedFilterSortControls
+            columns={columns}
+            onFilterChange={handleFilterChange}
+            onSortChange={handleSortChange}
+          />
+          <TableContainer component={Paper}>
+            <Table stickyHeader size="small">
+              <TableHead>
+                <TableRow>
+                  {columns.map(column => (
+                    <TableCell key={column.field}>{column.headerName}</TableCell>
+                  ))}
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredAndSortedSuppliers.map(supplier => (
+                  <TableRow key={supplier.id}>
+                    {columns.map(column => (
+                      <TableCell key={column.field}>{supplier[column.field]}</TableCell>
+                    ))}
+                    <TableCell>
+                      <IconButton onClick={() => handleOpenDialog('edit', supplier)}>
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton onClick={() => handleDelete(supplier.id)}>
+                        <DeleteIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </ResultsContainer>
+        <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+          <DialogTitle>{dialogMode === 'add' ? 'Add Supplier' : 'Edit Supplier'}</DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField
+                  autoFocus
+                  margin="dense"
+                  label="Name"
+                  type="text"
+                  fullWidth
+                  value={supplierName}
+                  onChange={(e) => setSupplierName(e.target.value)}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  margin="dense"
+                  label="Contact Number"
+                  type="text"
+                  fullWidth
+                  value={contactNumber}
+                  onChange={(e) => setContactNumber(e.target.value)}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  margin="dense"
+                  label="Contact Number Ext"
+                  type="text"
+                  fullWidth
+                  value={contactNumberExt}
+                  onChange={(e) => setContactNumberExt(e.target.value)}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  margin="dense"
+                  label="Purchase Email"
+                  type="email"
+                  fullWidth
+                  value={purchaseEmail}
+                  onChange={(e) => setPurchaseEmail(e.target.value)}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  margin="dense"
+                  label="Administration Email"
+                  type="email"
+                  fullWidth
+                  value={administrationEmail}
+                  onChange={(e) => setAdministrationEmail(e.target.value)}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  margin="dense"
+                  label="Type"
+                  type="text"
+                  fullWidth
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  margin="dense"
+                  label="Products"
+                  type="text"
+                  fullWidth
+                  value={products}
+                  onChange={(e) => setProducts(e.target.value)}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  margin="dense"
+                  label="Minimum Order Size"
+                  type="text"
+                  fullWidth
+                  value={minimumOrderSize}
+                  onChange={(e) => setMinimumOrderSize(e.target.value)}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  margin="dense"
+                  label="Website"
+                  type="url"
+                  fullWidth
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  margin="dense"
+                  label="User Login"
+                  type="text"
+                  fullWidth
+                  value={userLogin}
+                  onChange={(e) => setUserLogin(e.target.value)}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  margin="dense"
+                  label="User Password"
+                  type="password"
+                  fullWidth
+                  value={userPassword}
+                  onChange={(e) => setUserPassword(e.target.value)}
+                  required
+                />
+              </Grid>
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                margin="dense"
-                label="Contact Number"
-                type="text"
-                fullWidth
-                value={contactNumber}
-                onChange={(e) => setContactNumber(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                margin="dense"
-                label="Contact Number Ext"
-                type="text"
-                fullWidth
-                value={contactNumberExt}
-                onChange={(e) => setContactNumberExt(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                margin="dense"
-                label="Purchase Email"
-                type="email"
-                fullWidth
-                value={purchaseEmail}
-                onChange={(e) => setPurchaseEmail(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                margin="dense"
-                label="Administration Email"
-                type="email"
-                fullWidth
-                value={administrationEmail}
-                onChange={(e) => setAdministrationEmail(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                margin="dense"
-                label="Type"
-                type="text"
-                fullWidth
-                value={type}
-                onChange={(e) => setType(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                margin="dense"
-                label="Products"
-                type="text"
-                fullWidth
-                value={products}
-                onChange={(e) => setProducts(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                margin="dense"
-                label="Minimum Order Size"
-                type="text"
-                fullWidth
-                value={minimumOrderSize}
-                onChange={(e) => setMinimumOrderSize(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                margin="dense"
-                label="Website"
-                type="url"
-                fullWidth
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                margin="dense"
-                label="User Login"
-                type="text"
-                fullWidth
-                value={userLogin}
-                onChange={(e) => setUserLogin(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                margin="dense"
-                label="User Password"
-                type="password"
-                fullWidth
-                value={userPassword}
-                onChange={(e) => setUserPassword(e.target.value)}
-              />
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button onClick={handleSubmit} color="primary">
-            {dialogMode === 'add' ? 'Add' : 'Save'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Container>
+          </DialogContent>
+          <DialogActions>
+            <StyledButton onClick={handleCloseDialog}>Cancel</StyledButton>
+            <StyledButton onClick={handleSubmit} color="primary">
+              {dialogMode === 'add' ? 'Add' : 'Save'}
+            </StyledButton>
+          </DialogActions>
+        </Dialog>
+      </ContentContainer>
+    </PageContainer>
   );
 };
 

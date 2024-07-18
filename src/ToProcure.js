@@ -1,19 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Typography } from '@mui/material';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Box, Typography, ThemeProvider } from '@mui/material';
 import ToProcureTable from './ToProcureTable';
 import api from './api';
 import { useSnackbar } from './SnackbarContext';
+import theme, {
+  PageContainer,
+  ContentContainer,
+  ResultsContainer,
+  StyledHeader,
+  HeaderTitle,
+  HeaderActions
+} from './themes/globalTheme';
 
 const ToProcure = () => {
   const [toProcureItems, setToProcureItems] = useState([]);
   const [error, setError] = useState(null);
   const { showSnackbar } = useSnackbar();
 
-  useEffect(() => {
-    fetchToProcureItems();
-  }, []);
-
-  const fetchToProcureItems = async () => {
+  const fetchToProcureItems = useCallback(async () => {
     try {
       const response = await api.get('/api/to_procure/get_to_procure_items');
       setToProcureItems(response.data);
@@ -21,7 +25,11 @@ const ToProcure = () => {
       console.error('Error fetching to procure items:', error);
       setError(error.response?.data?.message || 'Failed to load to procure items. Please try again later.');
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchToProcureItems();
+  }, [fetchToProcureItems]);
 
   const handleCreatePurchaseOrder = async (selectedItems, errorMessage) => {
     if (errorMessage) {
@@ -42,7 +50,6 @@ const ToProcure = () => {
     }
   };
 
-
   if (error) {
     return (
       <Box width="100%">
@@ -54,14 +61,32 @@ const ToProcure = () => {
   }
 
   return (
-    <Box>
-      <Typography variant="h4">Items To Procure</Typography>
-      <ToProcureTable
-        data={toProcureItems}
-        setData={setToProcureItems}
-        onSaveSelected={handleCreatePurchaseOrder}
-      />
-    </Box>
+    <ThemeProvider theme={theme}>
+      <PageContainer>
+        <StyledHeader>
+          <Box sx={{ width: '33%' }} /> {/* Left spacer */}
+          <HeaderTitle variant="h5" component="h1" color="textPrimary">
+            Items To Procure
+          </HeaderTitle>
+          <HeaderActions>
+            {/* Add your header buttons here if needed */}
+          </HeaderActions>
+        </StyledHeader>
+        <ContentContainer>
+          <ResultsContainer>
+            {toProcureItems.length > 0 ? (
+              <ToProcureTable
+                data={toProcureItems}
+                setData={setToProcureItems}
+                onSaveSelected={handleCreatePurchaseOrder}
+              />
+            ) : (
+              <Typography variant="body1">No items to procure found.</Typography>
+            )}
+          </ResultsContainer>
+        </ContentContainer>
+      </PageContainer>
+    </ThemeProvider>
   );
 };
 

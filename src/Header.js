@@ -61,6 +61,8 @@ const Header = ({ isLoggedIn, onLogout }) => {
       { label: 'Inventory Valuation', path: '/inventory-valuation' },
     ],
     procurement: [
+      { label: 'Procurement Board', path: '/procurement-board' },
+      { label: 'Approve Items', path: '/to-approve' },
       { label: 'To Procure', path: '/to-procure' },
       { label: 'Purchase Orders', path: '/purchase-orders' },
       { label: 'Supplier Management', path: '/supplier-management' },

@@ -72,7 +72,7 @@ const AppContent = () => {
             path="/" 
             element={
               isLoggedIn ? (
-                <Navigate to="/procurement-board" replace />
+                <Navigate to="/dashboard" replace />
               ) : (
                 <Grid container justifyContent="center">
                   <Grid item xs={12} sm={10} md={8} lg={6}>

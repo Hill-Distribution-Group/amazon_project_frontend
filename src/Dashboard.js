@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Box, Grid, Paper, Typography, Button, List, ListItem, ListItemText, CircularProgress,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Divider, IconButton,
-  Tooltip
+  Box, Grid, Paper, Typography, List, ListItem, ListItemText, CircularProgress,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Divider,
+  
 } from '@mui/material';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
@@ -10,12 +10,11 @@ import {
 } from 'recharts';
 import { 
   TrendingUp, TrendingDown, Inventory, ShoppingCart, AttachMoney, Refresh,
-  Warning, CheckCircle, Cancel, ArrowForward
+  Warning, CheckCircle, Cancel
 } from '@mui/icons-material';
 import theme, { 
   PageContainer, 
   ContentContainer, 
-  ResultsContainer, 
   StyledHeader,
   HeaderTitle,
   HeaderActions,
@@ -51,14 +50,14 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
 const Dashboard = () => {
   const [loading, setLoading] = useState(false);
-  const [quickStats, setQuickStats] = useState({
+  const [quickStats] = useState({
     totalSales: 280000,
     inventoryValue: 1250000,
     pendingOrders: 37,
     profitMargin: 18.5
   });
 
-  const [topProducts, setTopProducts] = useState([
+  const [topProducts] = useState([
     { id: 1, name: 'Product A', sales: 12500, stock: 150 },
     { id: 2, name: 'Product B', sales: 10800, stock: 80 },
     { id: 3, name: 'Product C', sales: 9200, stock: 200 },
@@ -66,7 +65,7 @@ const Dashboard = () => {
     { id: 5, name: 'Product E', sales: 7900, stock: 100 },
   ]);
 
-  const [recentActivities, setRecentActivities] = useState([
+  const [recentActivities] = useState([
     { id: 1, type: 'order', message: 'New order received', details: 'Order #1234 - £500', icon: <ShoppingCart color="primary" /> },
     { id: 2, type: 'alert', message: 'Low stock alert', details: 'SKU: ABC123 - Reorder soon', icon: <Warning color="error" /> },
     { id: 3, type: 'approval', message: 'Price change approved', details: 'Product XYZ - New price: £24.99', icon: <CheckCircle color="success" /> },

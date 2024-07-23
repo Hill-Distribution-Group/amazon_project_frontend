@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   Box, Grid, Paper, Typography, List, ListItem, ListItemText, CircularProgress,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Divider,
-  
 } from '@mui/material';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
@@ -20,6 +19,7 @@ import theme, {
   HeaderActions,
   StyledButton
 } from './themes/globalTheme';
+import api from './api';  // Make sure to import your api utility
 
 // Mock data for charts
 const salesData = [
@@ -57,6 +57,22 @@ const Dashboard = () => {
     profitMargin: 18.5
   });
 
+  const [decisionKPI, setDecisionKPI] = useState(null);
+
+  useEffect(() => {
+    fetchDecisionKPI();
+  }, []);
+  
+  const fetchDecisionKPI = async () => {
+    try {
+      const response = await api.get('api/dashboard/get_decision_change_kpi');
+      setDecisionKPI(response.data);
+    } catch (error) {
+      console.error('Error fetching decision KPI:', error);
+    }
+  };
+
+
   const [topProducts] = useState([
     { id: 1, name: 'Product A', sales: 12500, stock: 150 },
     { id: 2, name: 'Product B', sales: 10800, stock: 80 },
@@ -80,7 +96,7 @@ const Dashboard = () => {
 
   const handleRefresh = () => {
     setLoading(true);
-    // Simulate API call
+    fetchDecisionKPI();
     setTimeout(() => setLoading(false), 1500);
   };
 
@@ -106,6 +122,41 @@ const Dashboard = () => {
 
       <ContentContainer>
         <Grid container spacing={3}>
+
+          {/* Decision Change KPI */}
+          {decisionKPI && (
+            <Grid item xs={12}>
+              <Paper sx={{ p: 2 }}>
+                <Typography variant="h6" gutterBottom>Decision Change KPI</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6} md={4}>
+                    <Paper elevation={3} sx={{ p: 2, textAlign: 'center' }}>
+                      <Typography variant="subtitle1">Search Result Changes</Typography>
+                      <Typography variant="h4">{decisionKPI.search_result_changes}</Typography>
+                      <Typography variant="body2">Total Results: {decisionKPI.search_results}</Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={4}>
+                    <Paper elevation={3} sx={{ p: 2, textAlign: 'center' }}>
+                      <Typography variant="subtitle1">Saved Result Changes</Typography>
+                      <Typography variant="h4">{decisionKPI.saved_result_changes}</Typography>
+                      <Typography variant="body2">Total Results: {decisionKPI.saved_results}</Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Paper elevation={3} sx={{ p: 2, textAlign: 'center' }}>
+                      <Typography variant="subtitle1">Total Decision Changes</Typography>
+                      <Typography variant="h4">{decisionKPI.total_decision_changes}</Typography>
+                      <Typography variant="body2">
+                        Average Changes: {decisionKPI.average_changes_per_result.toFixed(2)}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </Paper>
+            </Grid>
+          )}
+
           {/* Quick Stats */}
           <Grid item xs={12} md={3}>
             <Paper sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

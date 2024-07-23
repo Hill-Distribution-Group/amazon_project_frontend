@@ -56,6 +56,24 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
   const { showSnackbar } = useSnackbar();
   const [localLoading, setLocalLoading] = useState(false);
   const [logDrawerOpen, setLogDrawerOpen] = useState(false);
+  const [resultTabValue, setResultTabValue] = useState(0);
+  const [pendingResults, setPendingResults] = useState([]);
+  const [rejectedResults, setRejectedResults] = useState([]);
+  const [approvedResults, setApprovedResults] = useState([]);
+  const [cantProcureResults, setCantProcureResults] = useState([]);
+
+  const handleResultTabChange = (event, newValue) => {
+    setResultTabValue(newValue);
+  };
+
+  const resetInputValues = useCallback(() => {
+    setUrl('');
+    setInputValue('');
+    setCostOfGoods('');
+    setVat('');
+    setImage(null);
+    setCounterParty('');
+  }, []);
 
   const LogIcon = ({ logType }) => {
     switch (logType) {
@@ -84,7 +102,12 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
     try {
       const response = await api.get('/api/procurement_board/get_search_results');
       if (response.data) {
-        setResults(response.data);
+        const allResults = response.data;
+        setResults(allResults.filter(item => item['Approval Status'] === 'not_sent'));
+        setPendingResults(allResults.filter(item => item['Approval Status'] === 'pending'));
+        setRejectedResults(allResults.filter(item => item['Approval Status'] === 'rejected'));
+        setApprovedResults(allResults.filter(item => item['Approval Status'] === 'approved'));
+        setCantProcureResults(allResults.filter(item => item['Approval Status'] === 'cant_procured'));
       }
     } catch (error) {
       console.error('Error fetching search results:', error);
@@ -150,8 +173,8 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
       const response = await api.post('/api/procurement_board/save_flagged', { items: selectedItems });
       if (response.data && response.data.message) {
         setResults(prevResults => prevResults.map(item => {
-          if (selectedItems.some(selectedItem => selectedItem.ASIN === item.ASIN)) {
-            return { ...item, is_sent_for_approval: true };
+          if (selectedItems.some(selectedItem => selectedItem.ID === item.ID)) {
+            return { ...item };
           }
           return item;
         }));
@@ -166,9 +189,9 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
 
   const handleRemoveSelected = async (selectedItems) => {
     try {
-      const asinList = selectedItems.map(item => item.ASIN);
-      await api.post('/api/procurement_board/remove_results', { asin_list: asinList });
-      setResults(prevResults => prevResults.filter(item => !asinList.includes(item.ASIN)));
+      const idList = selectedItems.map(item => item.ID);
+      await api.post('/api/procurement_board/remove_results', { ID_list: idList });
+      setResults(prevResults => prevResults.filter(item => !idList.includes(item.ID)));
       showSnackbar('Selected items removed successfully', 'success');
     } catch (error) {
       console.error('Error removing items:', error);
@@ -179,12 +202,12 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
   const handleDashboardDecisionUpdate = async (updatedItem) => {
     try {
       const response = await api.post('/api/procurement_board/update_decision', {
-        asin: updatedItem.ASIN,
-        decision: updatedItem.Decision,
+        ID: updatedItem.ID,
+        Decision: updatedItem.Decision,
       });
       if (response.status === 200) {
         setResults(prevResults => prevResults.map(item =>
-          item.ASIN === updatedItem.ASIN ? { ...item, Decision: updatedItem.Decision } : item
+          item.ID === updatedItem.ID ? { ...item, Decision: updatedItem.Decision } : item
         ));
         showSnackbar('Decision updated successfully', 'success');
       } else {
@@ -199,12 +222,12 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
   const handleCommentUpdate = async (updatedItem) => {
     try {
       const response = await api.post('/api/procurement_board/update_comment', {
-        asin: updatedItem.ASIN,
-        comment: updatedItem.Comment,
+        ID: updatedItem.ID,
+        Comment: updatedItem.Comment,
       });
       if (response.status === 200) {
         setResults(prevResults => prevResults.map(item =>
-          item.ASIN === updatedItem.ASIN ? { ...item, Comment: updatedItem.Comment } : item
+          item.ID === updatedItem.ID ? { ...item, Comment: updatedItem.Comment } : item
         ));
         showSnackbar('Comment updated successfully', 'success');
       } else {
@@ -216,7 +239,6 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
     }
   };
 
-  // Form Submission and Processing
   const pollProcessingStatus = useCallback(async () => {
     try {
       const response = await api.get('/api/procurement_board/process_status');
@@ -228,6 +250,7 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
         showSnackbar('Processing completed successfully', 'success');
         setLocalLoading(false);
         setLoading(false);
+        resetInputValues(); // Reset input values after processing is complete
       } else if (status === 'stopped' || status === 'error') {
         addLog(`Process ${status}`, 'error');
         setLocalLoading(false);
@@ -240,8 +263,10 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
       setLocalLoading(false);
       setLoading(false);
     }
-  }, [addLog, showSnackbar]);
+  }, [addLog, showSnackbar, resetInputValues]);
 
+
+  // Form Submission and Processing
   const handleSubmit = useCallback(async () => {
     try {
       if (localLoading) return;
@@ -297,6 +322,7 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
         showSnackbar('Processing completed successfully', 'success');
         setLocalLoading(false);
         setLoading(false);
+        resetInputValues(); // Reset input values after processing is complete
       }
     } catch (error) {
       if (axios.isCancel(error)) {
@@ -309,7 +335,7 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
       setLoading(false);
     }
   }, [localLoading, counterParty, tabValue, processType, url, inputType,
-    inputValue, costOfGoods, vat, image, showSnackbar, pollProcessingStatus]);
+    inputValue, costOfGoods, vat, image, showSnackbar, pollProcessingStatus, resetInputValues]);
 
   const handleCancel = () => {
     if (cancelTokenSource.current) {
@@ -331,7 +357,7 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
       <StyledHeader>
         <Box sx={{ width: '33%' }} />
         <HeaderTitle variant="h5" component="h1" color="textPrimary">
-        Procurement Board
+          Procurement Board
         </HeaderTitle>
         <HeaderActions>
           <Button
@@ -353,8 +379,8 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
       </StyledHeader>
 
       <ContentContainer>
-      <Paper elevation={3} sx={{ p: 2, mb: 2, width: '100%' }}>
-      <Tabs value={tabValue} onChange={handleTabChange} centered sx={{ mb: 2 }}>
+        <Paper elevation={3} sx={{ p: 2, mb: 2, width: '100%' }}>
+          <Tabs value={tabValue} onChange={handleTabChange} centered sx={{ mb: 2 }}>
             <Tab label="URL" />
             <Tab label="TEXT" />
             <Tab label="IMAGE" />
@@ -372,199 +398,255 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
               />
             </Box>
           )}
-            {tabValue === 1 && (
-              <Box mt={3}>
-                <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12} sm={3}>
-                    <FormControl component="fieldset">
-                      <RadioGroup
-                        row
-                        value={inputType}
-                        onChange={(e) => setInputType(e.target.value)}
-                      >
-                        <FormControlLabel value="title" control={<Radio />} label="Product Title" />
-                        <FormControlLabel value="asin" control={<Radio />} label="ASIN" />
-                      </RadioGroup>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} sm={3}>
-                    <TextField
-                      label={inputType === 'title' ? "Product Title" : "ASIN"}
-                      fullWidth
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      required
-                      variant="outlined"
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={2}>
-                    <TextField
-                      label="Cost of Goods"
-                      fullWidth
-                      value={costOfGoods}
-                      onChange={(e) => setCostOfGoods(e.target.value)}
-                      required
-                      variant="outlined"
-                      type="number"
-                      InputProps={{
-                        startAdornment: <InputAdornment position="start">£</InputAdornment>,
-                      }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={2}>
-                    <FormControl fullWidth variant="outlined">
-                      <InputLabel>VAT</InputLabel>
-                      <Select
-                        value={vat}
-                        onChange={(e) => setVat(e.target.value)}
-                        label="VAT"
-                        required
-                      >
-                        <MenuItem value="0">0%</MenuItem>
-                        <MenuItem value="0.05">5%</MenuItem>
-                        <MenuItem value="0.2">20%</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} sm={2}>
-                    <Autocomplete
-                      value={counterParty}
-                      onChange={(event, newValue) => {
-                        setCounterParty(newValue);
-                      }}
-                      disablePortal
-                      options={counterParties}
-                      getOptionLabel={(option) => option?.name || ''}
-                      isOptionEqualToValue={(option, value) => option.id === value?.id}
-                      loading={loadingCounterParties}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label="Counter Party"
-                          required
-                          error={!!counterPartyError}
-                          helperText={counterPartyError}
-                          InputProps={{
-                            ...params.InputProps,
-                            endAdornment: (
-                              <>
-                                {loadingCounterParties ? <CircularProgress color="inherit" size={20} /> : null}
-                                {params.InputProps.endAdornment}
-                              </>
-                            ),
-                          }}
-                        />
-                      )}
-                      ListboxProps={{
-                        style: { maxHeight: 200, overflow: 'auto' }
-                      }}
-                      renderOption={(props, option) => (
-                        <li {...props} key={option.id}>
-                          {option.name}
-                        </li>
-                      )}
-                      fullWidth
-                      noOptionsText="No counter parties found"
-                    />
-                  </Grid>
+          {tabValue === 1 && (
+            <Box mt={3}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} sm={3}>
+                  <FormControl component="fieldset">
+                    <RadioGroup
+                      row
+                      value={inputType}
+                      onChange={(e) => setInputType(e.target.value)}
+                    >
+                      <FormControlLabel value="title" control={<Radio />} label="Product Title" />
+                      <FormControlLabel value="asin" control={<Radio />} label="ASIN" />
+                    </RadioGroup>
+                  </FormControl>
                 </Grid>
-              </Box>
-            )}
-  
-            {tabValue === 2 && (
-              <Box mt={3}>
-                <Button
-                  variant="outlined"
-                  component="label"
-                  fullWidth
-                  startIcon={<CloudUploadIcon />}
-                  sx={{
-                    width: 200,
-                    margin: 'auto',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 1,
-                  }}
-                >
-                  Upload Image
-                  <input
-                    type="file"
-                    hidden
-                    onChange={(e) => setImage(e.target.files[0])}
-                    accept="image/*"
+                <Grid item xs={12} sm={3}>
+                  <TextField
+                    label={inputType === 'title' ? "Product Title" : "ASIN"}
+                    fullWidth
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    required
+                    variant="outlined"
                   />
-                </Button>
-                {image && (
-                  <Typography variant="body2" color="textSecondary" mt={1}>
-                    Selected file: {image.name}
-                  </Typography>
-                )}
-              </Box>
-            )}
-  
-            <Box mt={4} display="flex" justifyContent="center">
-              <StyledButton
-                variant="contained"
-                color="primary"
-                onClick={handleSubmit}
-                disabled={loading}
-                sx={{ mr: 2, minWidth: 120 }}
-              >
-                {loading ? <CircularProgress size={24} /> : 'Submit'}
-              </StyledButton>
-              <StyledButton
-                variant="outlined"
-                color="secondary"
-                onClick={handleCancel}
-                disabled={!loading}
-                sx={{ minWidth: 120 }}
-              >
-                Cancel
-              </StyledButton>
+                </Grid>
+                <Grid item xs={12} sm={2}>
+                  <TextField
+                    label="Cost of Goods"
+                    fullWidth
+                    value={costOfGoods}
+                    onChange={(e) => setCostOfGoods(e.target.value)}
+                    required
+                    variant="outlined"
+                    type="number"
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start">£</InputAdornment>,
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={2}>
+                  <FormControl fullWidth variant="outlined">
+                    <InputLabel>VAT</InputLabel>
+                    <Select
+                      value={vat}
+                      onChange={(e) => setVat(e.target.value)}
+                      label="VAT"
+                      required
+                    >
+                      <MenuItem value="0">0%</MenuItem>
+                      <MenuItem value="0.05">5%</MenuItem>
+                      <MenuItem value="0.2">20%</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={2}>
+                  <Autocomplete
+                    value={counterParty}
+                    onChange={(event, newValue) => {
+                      setCounterParty(newValue);
+                    }}
+                    disablePortal
+                    options={counterParties}
+                    getOptionLabel={(option) => option?.name || ''}
+                    isOptionEqualToValue={(option, value) => option.id === value?.id}
+                    loading={loadingCounterParties}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Counter Party"
+                        required
+                        error={!!counterPartyError}
+                        helperText={counterPartyError}
+                        InputProps={{
+                          ...params.InputProps,
+                          endAdornment: (
+                            <>
+                              {loadingCounterParties ? <CircularProgress color="inherit" size={20} /> : null}
+                              {params.InputProps.endAdornment}
+                            </>
+                          ),
+                        }}
+                      />
+                    )}
+                    ListboxProps={{
+                      style: { maxHeight: 200, overflow: 'auto' }
+                    }}
+                    renderOption={(props, option) => (
+                      <li {...props} key={option.id}>
+                        {option.name}
+                      </li>
+                    )}
+                    fullWidth
+                    noOptionsText="No counter parties found"
+                  />
+                </Grid>
+              </Grid>
             </Box>
-          </Paper>
-  
-          <ResultsContainer>
-            <Typography variant="h5" gutterBottom>Results</Typography>
-            {localLoading && <LinearProgress sx={{ mb: 2 }} />}
-            {!localLoading && results.length > 0 && (
-              <ResultTable
-                data={results}
-                setData={setResults}
-                onSaveSelected={handleSaveSelected}
-                onRemoveSelected={handleRemoveSelected}
-                onDecisionUpdate={handleDashboardDecisionUpdate}
-                onCommentUpdate={handleCommentUpdate}
-                isSavedResults={false}
-              />
-            )}
-          </ResultsContainer>
-        </ContentContainer>
-        
-        <LogDrawer
-          anchor="right"
-          open={logDrawerOpen}
-          onClose={toggleLogDrawer}
-        >
-          <Box sx={{ width: 300, p: 2 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>System Logs</Typography>
-            <Divider sx={{ mb: 2 }} />
-            {logs.map((log, index) => (
-              <Box key={index} sx={{ mb: 2, p: 1, backgroundColor: 'rgba(0,0,0,0.03)', borderRadius: 1 }}>
-                <Box display="flex" alignItems="center">
-                  <LogIcon logType={log.type} />
-                  <Typography variant="caption" color="textSecondary" sx={{ ml: 1 }}>
-                    {log.timestamp}
-                  </Typography>
-                </Box>
-                <Typography variant="body2" sx={{ mt: 0.5 }}>{log.message}</Typography>
-              </Box>
-            ))}
+          )}
+
+          {tabValue === 2 && (
+            <Box mt={3}>
+              <Button
+                variant="outlined"
+                component="label"
+                fullWidth
+                startIcon={<CloudUploadIcon />}
+                sx={{
+                  width: 200,
+                  margin: 'auto',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 1,
+                }}
+              >
+                Upload Image
+                <input
+                  type="file"
+                  hidden
+                  onChange={(e) => setImage(e.target.files[0])}
+                  accept="image/*"
+                />
+              </Button>
+              {image && (
+                <Typography variant="body2" color="textSecondary" mt={1}>
+                  Selected file: {image.name}
+                </Typography>
+              )}
+            </Box>
+          )}
+
+          <Box mt={4} display="flex" justifyContent="center">
+            <StyledButton
+              variant="contained"
+              color="primary"
+              onClick={handleSubmit}
+              disabled={loading}
+              sx={{ mr: 2, minWidth: 120 }}
+            >
+              {loading ? <CircularProgress size={24} /> : 'Submit'}
+            </StyledButton>
+            <StyledButton
+              variant="outlined"
+              color="secondary"
+              onClick={handleCancel}
+              disabled={!loading}
+              sx={{ minWidth: 120 }}
+            >
+              Cancel
+            </StyledButton>
           </Box>
-        </LogDrawer>
-      </PageContainer>
-    );
-  };
-  
-  export default ProcurementBoard;
+        </Paper>
+
+        <ResultsContainer>
+          <Typography variant="h5" gutterBottom>Results</Typography>
+          {localLoading && <LinearProgress sx={{ mb: 2 }} />}
+          {!localLoading && (results.length > 0 || pendingResults.length > 0 || rejectedResults.length > 0 || approvedResults.length > 0 || cantProcureResults.length > 0) && (
+            <>
+              <Tabs value={resultTabValue} onChange={handleResultTabChange} sx={{ mb: 2 }}>
+                <Tab label={`New Results (${results.length})`} />
+                <Tab label={`Pending (${pendingResults.length})`} />
+                <Tab label={`Rejected (${rejectedResults.length})`} />
+                <Tab label={`Approved (${approvedResults.length})`} />
+                <Tab label={`Can't Procure (${cantProcureResults.length})`} />
+              </Tabs>
+              {resultTabValue === 0 && (
+                <ResultTable
+                  data={results}
+                  setData={setResults}
+                  onSaveSelected={handleSaveSelected}
+                  onRemoveSelected={handleRemoveSelected}
+                  onDecisionUpdate={handleDashboardDecisionUpdate}
+                  onCommentUpdate={handleCommentUpdate}
+                  isSavedResults={false}
+                />
+              )}
+              {resultTabValue === 1 && (
+                <ResultTable
+                  data={pendingResults}
+                  setData={setPendingResults}
+                  onSaveSelected={handleSaveSelected}
+                  onRemoveSelected={handleRemoveSelected}
+                  onDecisionUpdate={handleDashboardDecisionUpdate}
+                  onCommentUpdate={handleCommentUpdate}
+                  isSavedResults={false}
+                />
+              )}
+              {resultTabValue === 2 && (
+                <ResultTable
+                  data={rejectedResults}
+                  setData={setRejectedResults}
+                  onSaveSelected={handleSaveSelected}
+                  onRemoveSelected={handleRemoveSelected}
+                  onDecisionUpdate={handleDashboardDecisionUpdate}
+                  onCommentUpdate={handleCommentUpdate}
+                  isSavedResults={false}
+                />
+              )}
+              {resultTabValue === 3 && (
+                <ResultTable
+                  data={approvedResults}
+                  setData={setApprovedResults}
+                  onSaveSelected={handleSaveSelected}
+                  onRemoveSelected={handleRemoveSelected}
+                  onDecisionUpdate={handleDashboardDecisionUpdate}
+                  onCommentUpdate={handleCommentUpdate}
+                  isSavedResults={false}
+                />
+              )}
+              {resultTabValue === 4 && (
+                <ResultTable
+                  data={cantProcureResults}
+                  setData={setCantProcureResults}
+                  onSaveSelected={handleSaveSelected}
+                  onRemoveSelected={handleRemoveSelected}
+                  onDecisionUpdate={handleDashboardDecisionUpdate}
+                  onCommentUpdate={handleCommentUpdate}
+                  isSavedResults={false}
+                />
+              )}
+            </>
+          )}
+        </ResultsContainer>
+      </ContentContainer>
+
+
+      <LogDrawer
+        anchor="right"
+        open={logDrawerOpen}
+        onClose={toggleLogDrawer}
+      >
+        <Box sx={{ width: 300, p: 2 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>System Logs</Typography>
+          <Divider sx={{ mb: 2 }} />
+          {logs.map((log, index) => (
+            <Box key={index} sx={{ mb: 2, p: 1, backgroundColor: 'rgba(0,0,0,0.03)', borderRadius: 1 }}>
+              <Box display="flex" alignItems="center">
+                <LogIcon logType={log.type} />
+                <Typography variant="caption" color="textSecondary" sx={{ ml: 1 }}>
+                  {log.timestamp}
+                </Typography>
+              </Box>
+              <Typography variant="body2" sx={{ mt: 0.5 }}>{log.message}</Typography>
+            </Box>
+          ))}
+        </Box>
+      </LogDrawer>
+    </PageContainer>
+  );
+};
+
+export default ProcurementBoard;

@@ -41,7 +41,9 @@ import theme, {
   HeaderTitle,
   HeaderActions
 } from './themes/globalTheme';
-import EnhancedFilterSortControls from './EnhancedFilterSortControls';
+import FilterControls from './FilterControls';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 
 const PurchaseOrders = () => {
   const availableSalesChannels = [
@@ -69,7 +71,7 @@ const PurchaseOrders = () => {
   });
   const [selectedPOs, setSelectedPOs] = useState({});
   const [filters, setFilters] = useState({});
-  const [sortConfig, setSortConfig] = useState({ field: '', direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
 
   const truncateText = (text, maxLength) => {
     if (text && text.length > maxLength) {
@@ -80,10 +82,6 @@ const PurchaseOrders = () => {
 
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters);
-  };
-
-  const handleSortChange = (field, direction) => {
-    setSortConfig({ field, direction });
   };
 
   const extraPackagingOptions = [
@@ -400,6 +398,14 @@ const PurchaseOrders = () => {
     { field: 'total_amount', headerName: 'Total Amount' },
   ], []);
 
+  const handleSort = (key) => {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
   const filteredAndSortedPurchaseOrders = useMemo(() => {
     let result = purchaseOrders;
 
@@ -414,20 +420,20 @@ const PurchaseOrders = () => {
     });
 
     // Apply sorting
-    if (sortConfig.field) {
+    if (sortConfig.key) {
       result.sort((a, b) => {
-        const aValue = sortConfig.field.includes('.') ? 
-          sortConfig.field.split('.').reduce((obj, key) => obj && obj[key], a) : 
-          a[sortConfig.field];
-        const bValue = sortConfig.field.includes('.') ? 
-          sortConfig.field.split('.').reduce((obj, key) => obj && obj[key], b) : 
-          b[sortConfig.field];
+        const aValue = sortConfig.key.includes('.') ? 
+          sortConfig.key.split('.').reduce((obj, key) => obj && obj[key], a) : 
+          a[sortConfig.key];
+        const bValue = sortConfig.key.includes('.') ? 
+          sortConfig.key.split('.').reduce((obj, key) => obj && obj[key], b) : 
+          b[sortConfig.key];
 
         if (aValue < bValue) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
+          return sortConfig.direction === 'ascending' ? -1 : 1;
         }
         if (aValue > bValue) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
+          return sortConfig.direction === 'ascending' ? 1 : -1;
         }
         return 0;
       });
@@ -450,7 +456,7 @@ const PurchaseOrders = () => {
     <ThemeProvider theme={theme}>
       <PageContainer>
         <StyledHeader>
-          <Box sx={{ width: '33%' }} /> {/* Left spacer */}
+          <Box sx={{ width: '33%' }} />
           <HeaderTitle variant="h5" component="h1" color="textPrimary">
             Purchase Orders
           </HeaderTitle>
@@ -461,10 +467,9 @@ const PurchaseOrders = () => {
         <ContentContainer>
           <ResultsContainer>
             <Box display="flex" justifyContent="space-between" mb={2}>
-              <EnhancedFilterSortControls
+              <FilterControls
                 columns={columns}
                 onFilterChange={handleFilterChange}
-                onSortChange={handleSortChange}
               />
               <Box display="flex" alignItems="center">
                 <Button
@@ -490,7 +495,7 @@ const PurchaseOrders = () => {
               <Table>
                 <TableHead>
                   <TableRow>
-                  <TableCell padding="checkbox">
+                    <TableCell padding="checkbox">
                       <Checkbox
                         indeterminate={
                           Object.values(selectedPOs).some(Boolean) &&
@@ -513,7 +518,18 @@ const PurchaseOrders = () => {
                       />
                     </TableCell>
                     {columns.map(column => (
-                      <TableCell key={column.field}>{column.headerName}</TableCell>
+                      <TableCell 
+                        key={column.field}
+                        onClick={() => handleSort(column.field)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <Box display="flex" alignItems="center">
+                          {column.headerName}
+                          {sortConfig.key === column.field && (
+                            sortConfig.direction === 'ascending' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                          )}
+                        </Box>
+                      </TableCell>
                     ))}
                     <TableCell>Actions</TableCell>
                   </TableRow>
@@ -521,7 +537,7 @@ const PurchaseOrders = () => {
                 <TableBody>
                   {filteredAndSortedPurchaseOrders.map((po) => (
                     <TableRow key={po.id} hover onClick={() => handleRowClick(po)}>
-                                            <TableCell padding="checkbox">
+                      <TableCell padding="checkbox">
                         <Checkbox
                           checked={!!selectedPOs[po.id]}
                           onChange={() => handlePOCheckboxChange(po.id)}
@@ -595,6 +611,7 @@ const PurchaseOrders = () => {
                 </TableBody>
               </Table>
             </TableContainer>
+
 
             <Dialog open={openDialog} onClose={handleCloseDialog} fullWidth maxWidth="xl">
               <DialogTitle>{isEditing ? 'Edit Purchase Order' : 'Create Purchase Order'}</DialogTitle>

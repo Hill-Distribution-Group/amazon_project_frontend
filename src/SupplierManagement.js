@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
+  Box,
   TableContainer,
   Table,
   TableHead,
@@ -13,11 +14,15 @@ import {
   DialogActions,
   Grid,
   IconButton,
-  Paper
+  Paper,
+  Tooltip,
+  Autocomplete
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import api from './api';
 import { useSnackbar } from './SnackbarContext';
 import {
@@ -29,7 +34,7 @@ import {
   HeaderActions,
   StyledButton
 } from './themes/globalTheme';
-import EnhancedFilterSortControls from './EnhancedFilterSortControls';
+import FilterControls from './FilterControls';
 
 const SupplierManagement = () => {
   const [suppliers, setSuppliers] = useState([]);
@@ -42,15 +47,25 @@ const SupplierManagement = () => {
   const [administrationEmail, setAdministrationEmail] = useState('');
   const [contactNumberExt, setContactNumberExt] = useState('');
   const [type, setType] = useState('');
-  const [products, setProducts] = useState('');
+  const [product, setProduct] = useState('');
   const [minimumOrderSize, setMinimumOrderSize] = useState('');
   const [website, setWebsite] = useState('');
   const [userLogin, setUserLogin] = useState('');
   const [userPassword, setUserPassword] = useState('');
+  const [comment, setComment] = useState('');
   const { showSnackbar } = useSnackbar();
 
   const [filters, setFilters] = useState({});
-  const [sortConfig, setSortConfig] = useState({ field: '', direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
+
+  const productOptions = [
+    'Food and Drink',
+    'Supplements',
+    'Candy',
+    'Car parts',
+    'Pet supplies',
+    'Other'
+  ];
 
   const fetchSuppliers = useCallback(async () => {
     try {
@@ -77,11 +92,12 @@ const SupplierManagement = () => {
       setAdministrationEmail(supplier.administration_email || '');
       setContactNumberExt(supplier.contact_number_ext || '');
       setType(supplier.type || '');
-      setProducts(supplier.products || '');
+      setProduct(supplier.products ? supplier.products.split(',')[0] : '');
       setMinimumOrderSize(supplier.minimum_order_size || '');
       setWebsite(supplier.website || '');
       setUserLogin(supplier.user_login || '');
       setUserPassword(''); // Don't set the password for security reasons
+      setComment(supplier.comment || '');
     } else {
       setSupplierId(null);
       setSupplierName('');
@@ -90,11 +106,12 @@ const SupplierManagement = () => {
       setAdministrationEmail('');
       setContactNumberExt('');
       setType('');
-      setProducts('');
+      setProduct('');
       setMinimumOrderSize('');
       setWebsite('');
       setUserLogin('');
       setUserPassword('');
+      setComment('');
     }
     setOpenDialog(true);
   };
@@ -104,8 +121,8 @@ const SupplierManagement = () => {
   };
 
   const handleSubmit = async () => {
-    if (!supplierName.trim() || !contactNumber.trim() || !purchaseEmail.trim() || !administrationEmail.trim() || !contactNumberExt.trim() || !type.trim() || !products.trim() || !minimumOrderSize.trim() || !website.trim() || !userLogin.trim() || !userPassword.trim()) {
-      showSnackbar('All fields are required!', 'error');
+    if (!supplierName.trim() || !contactNumber.trim() || !purchaseEmail.trim() || !administrationEmail.trim() || !type.trim() || !minimumOrderSize.trim() || !website.trim()) {
+      showSnackbar('Please fill in all required fields!', 'error');
       return;
     }
 
@@ -116,11 +133,12 @@ const SupplierManagement = () => {
       administration_email: administrationEmail,
       contact_number_ext: contactNumberExt,
       type,
-      products,
+      products: product,
       minimum_order_size: minimumOrderSize,
       website,
       user_login: userLogin,
       user_password: userPassword,
+      comment
     };
 
     try {
@@ -158,10 +176,6 @@ const SupplierManagement = () => {
     setFilters(newFilters);
   };
 
-  const handleSortChange = (field, direction) => {
-    setSortConfig({ field, direction });
-  };
-
   const columns = useMemo(() => [
     { field: 'name', headerName: 'Name' },
     { field: 'contact_number', headerName: 'Contact Number' },
@@ -171,7 +185,16 @@ const SupplierManagement = () => {
     { field: 'products', headerName: 'Products' },
     { field: 'minimum_order_size', headerName: 'Minimum Order Size' },
     { field: 'website', headerName: 'Website' },
+    { field: 'comment', headerName: 'Comment' },
   ], []);
+
+  const handleSort = (key) => {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
 
   const filteredAndSortedSuppliers = useMemo(() => {
     let result = suppliers;
@@ -186,13 +209,13 @@ const SupplierManagement = () => {
     });
 
     // Apply sorting
-    if (sortConfig.field) {
+    if (sortConfig.key) {
       result.sort((a, b) => {
-        if (a[sortConfig.field] < b[sortConfig.field]) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
         }
-        if (a[sortConfig.field] > b[sortConfig.field]) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
         }
         return 0;
       });
@@ -218,17 +241,27 @@ const SupplierManagement = () => {
           </HeaderActions>
         </StyledHeader>
         <ResultsContainer>
-          <EnhancedFilterSortControls
+          <FilterControls
             columns={columns}
             onFilterChange={handleFilterChange}
-            onSortChange={handleSortChange}
           />
           <TableContainer component={Paper}>
             <Table stickyHeader size="small">
               <TableHead>
                 <TableRow>
                   {columns.map(column => (
-                    <TableCell key={column.field}>{column.headerName}</TableCell>
+                    <TableCell 
+                      key={column.field}
+                      onClick={() => handleSort(column.field)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <Box display="flex" alignItems="center">
+                        {column.headerName}
+                        {sortConfig.key === column.field && (
+                          sortConfig.direction === 'ascending' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                        )}
+                      </Box>
+                    </TableCell>
                   ))}
                   <TableCell>Actions</TableCell>
                 </TableRow>
@@ -237,7 +270,15 @@ const SupplierManagement = () => {
                 {filteredAndSortedSuppliers.map(supplier => (
                   <TableRow key={supplier.id}>
                     {columns.map(column => (
-                      <TableCell key={column.field}>{supplier[column.field]}</TableCell>
+                      <TableCell key={column.field}>
+                        {column.field === 'comment' ? (
+                          <Tooltip title={supplier[column.field] || ''}>
+                            <span>{(supplier[column.field] || '').substring(0, 20)}{supplier[column.field]?.length > 20 ? '...' : ''}</span>
+                          </Tooltip>
+                        ) : (
+                          supplier[column.field]
+                        )}
+                      </TableCell>
                     ))}
                     <TableCell>
                       <IconButton onClick={() => handleOpenDialog('edit', supplier)}>
@@ -288,7 +329,6 @@ const SupplierManagement = () => {
                   fullWidth
                   value={contactNumberExt}
                   onChange={(e) => setContactNumberExt(e.target.value)}
-                  required
                 />
               </Grid>
               <Grid item xs={12}>
@@ -325,14 +365,13 @@ const SupplierManagement = () => {
                 />
               </Grid>
               <Grid item xs={12}>
-                <TextField
-                  margin="dense"
-                  label="Products"
-                  type="text"
-                  fullWidth
-                  value={products}
-                  onChange={(e) => setProducts(e.target.value)}
-                  required
+                <Autocomplete
+                  options={productOptions}
+                  value={product}
+                  onChange={(event, newValue) => {
+                    setProduct(newValue);
+                  }}
+                  renderInput={(params) => <TextField {...params} label="Product" margin="dense" fullWidth />}
                 />
               </Grid>
               <Grid item xs={12}>
@@ -365,18 +404,28 @@ const SupplierManagement = () => {
                   fullWidth
                   value={userLogin}
                   onChange={(e) => setUserLogin(e.target.value)}
-                  required
                 />
               </Grid>
               <Grid item xs={12}>
                 <TextField
                   margin="dense"
                   label="User Password"
-                  type="password"
+                  type="text"
                   fullWidth
                   value={userPassword}
                   onChange={(e) => setUserPassword(e.target.value)}
-                  required
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  margin="dense"
+                  label="Comment"
+                  type="text"
+                  fullWidth
+                  multiline
+                  rows={4}
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
                 />
               </Grid>
             </Grid>

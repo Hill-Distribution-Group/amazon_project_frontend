@@ -3,10 +3,8 @@ import { Menu, MenuItem, Select } from '@mui/material';
 
 const decisions = [
   "No Buy",
-  "Buy (FBA-registered)",
-  "Buy (FBM-registered)",
-  "Buy (FBA-non-registered)",
-  "Buy (FBM-non-registered)"
+  "Buy (FBA)",
+  "Buy (FBM)",
 ];
 
 const ContextMenu = ({ anchorPosition, isOpen, onClose, onDecisionChange }) => {

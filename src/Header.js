@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { AppBar, Toolbar, Typography, IconButton, Menu, MenuItem, Badge, Box } from '@mui/material';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { AppBar, Toolbar, Typography, IconButton, MenuItem, Badge, Box, Paper, ClickAwayListener } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import AccountCircle from '@mui/icons-material/AccountCircle';
@@ -9,31 +9,30 @@ import api from './api';
 
 const Header = ({ isLoggedIn, onLogout }) => {
   const navigate = useNavigate();
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [menuAnchors, setMenuAnchors] = useState({
-    inventory: null,
-    procurement: null,
-    sales: null,
-    logistics: null,
-    analysis: null,
-    reports: null,
-  });
+  const [openMenu, setOpenMenu] = useState(null);
+  const menuRefs = useRef({});
+  const closeTimeoutRef = useRef(null);
 
-  const handleMenu = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
+  const handleMenuOpen = useCallback((menuName) => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+    }
+    setOpenMenu(menuName);
+  }, []);
 
-  const handleMenuOpen = (menuName) => (event) => {
-    setMenuAnchors({ ...menuAnchors, [menuName]: event.currentTarget });
-  };
+  const handleMenuClose = useCallback(() => {
+    closeTimeoutRef.current = setTimeout(() => {
+      setOpenMenu(null);
+    }, 800); 
+  }, []);
 
-  const handleMenuClose = (menuName) => () => {
-    setMenuAnchors({ ...menuAnchors, [menuName]: null });
-  };
+  const handleClickAway = useCallback(() => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+    }
+    setOpenMenu(null);
+  }, []);
 
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
 
   const handleLogout = async () => {
     try {
@@ -50,6 +49,7 @@ const Header = ({ isLoggedIn, onLogout }) => {
   const handleTitleClick = () => {
     navigate(isLoggedIn ? '/dashboard' : '/');
   };
+
 
   const menuItems = {
     inventory: [
@@ -102,8 +102,55 @@ const Header = ({ isLoggedIn, onLogout }) => {
     ],
   };
 
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const renderMenu = (menuName) => (
+    <ClickAwayListener onClickAway={handleClickAway}>
+      <Paper
+        ref={(el) => (menuRefs.current[menuName] = el)}
+        sx={{
+          position: 'absolute',
+          top: '100%',
+          left: 0,
+          zIndex: 9999,
+          mt: 1,
+          minWidth: 200,
+          boxShadow: 3,
+        }}
+        onMouseEnter={() => {
+          if (closeTimeoutRef.current) {
+            clearTimeout(closeTimeoutRef.current);
+          }
+        }}
+        onMouseLeave={handleMenuClose}
+      >
+        {menuItems[menuName].map((item) => (
+          <MenuItem
+            key={item.path}
+            onClick={() => {
+              navigate(item.path);
+              setOpenMenu(null);
+            }}
+            sx={{
+              transition: 'background-color 0.2s ease',
+              '&:hover': { backgroundColor: 'action.hover' },
+            }}
+          >
+            {item.label}
+          </MenuItem>
+        ))}
+      </Paper>
+    </ClickAwayListener>
+  );
+
   return (
-    <AppBar position="static">
+    <AppBar position="static" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
       <Toolbar>
         <Typography
           variant="h6"
@@ -116,7 +163,13 @@ const Header = ({ isLoggedIn, onLogout }) => {
         {isLoggedIn && (
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             {Object.keys(menuItems).map((menuName) => (
-              <Box key={menuName} sx={{ position: 'relative' }}>
+              <Box
+                key={menuName}
+                sx={{ position: 'relative' }}
+                onMouseEnter={() => handleMenuOpen(menuName)}
+                onMouseLeave={handleMenuClose}
+                onClick={() => handleMenuOpen(menuName)}
+              >
                 <Typography
                   variant="body2"
                   sx={{
@@ -125,26 +178,13 @@ const Header = ({ isLoggedIn, onLogout }) => {
                     display: 'flex',
                     alignItems: 'center',
                     '&:hover': { color: 'secondary.main' },
+                    transition: 'color 0.3s ease',
                   }}
-                  onMouseEnter={handleMenuOpen(menuName)}
                 >
                   {menuName.charAt(0).toUpperCase() + menuName.slice(1)}
                   <KeyboardArrowDownIcon fontSize="small" />
                 </Typography>
-                <Menu
-                  anchorEl={menuAnchors[menuName]}
-                  open={Boolean(menuAnchors[menuName])}
-                  onClose={handleMenuClose(menuName)}
-                  MenuListProps={{ onMouseLeave: handleMenuClose(menuName) }}
-                  anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                  transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                >
-                  {menuItems[menuName].map((item) => (
-                    <MenuItem key={item.path} onClick={() => navigate(item.path)}>
-                      {item.label}
-                    </MenuItem>
-                  ))}
-                </Menu>
+                {openMenu === menuName && renderMenu(menuName)}
               </Box>
             ))}
 
@@ -158,28 +198,47 @@ const Header = ({ isLoggedIn, onLogout }) => {
               <HelpOutlineIcon />
             </IconButton>
 
-            <IconButton
-              aria-label="account of current user"
-              aria-controls="menu-appbar"
-              aria-haspopup="true"
-              onClick={handleMenu}
-              color="inherit"
+            <Box
+              sx={{ position: 'relative' }}
+              onMouseEnter={() => handleMenuOpen('account')}
+              onMouseLeave={handleMenuClose}
+              onClick={() => handleMenuOpen('account')}
             >
-              <AccountCircle />
-            </IconButton>
-            <Menu
-              id="menu-appbar"
-              anchorEl={anchorEl}
-              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-              keepMounted
-              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-              open={Boolean(anchorEl)}
-              onClose={handleClose}
-            >
-              <MenuItem onClick={() => navigate('/profile')}>Profile</MenuItem>
-              <MenuItem onClick={() => navigate('/settings')}>Settings</MenuItem>
-              <MenuItem onClick={handleLogout}>Logout</MenuItem>
-            </Menu>
+              <IconButton
+                aria-label="account of current user"
+                aria-controls="menu-appbar"
+                aria-haspopup="true"
+                color="inherit"
+              >
+                <AccountCircle />
+              </IconButton>
+              {openMenu === 'account' && (
+                <ClickAwayListener onClickAway={handleClickAway}>
+                  <Paper
+                    ref={(el) => (menuRefs.current['account'] = el)}
+                    sx={{
+                      position: 'absolute',
+                      top: '100%',
+                      right: 0,
+                      zIndex: 9999,
+                      mt: 1,
+                      minWidth: 200,
+                      boxShadow: 3,
+                    }}
+                    onMouseEnter={() => {
+                      if (closeTimeoutRef.current) {
+                        clearTimeout(closeTimeoutRef.current);
+                      }
+                    }}
+                    onMouseLeave={handleMenuClose}
+                  >
+                    <MenuItem onClick={() => { navigate('/profile'); setOpenMenu(null); }}>Profile</MenuItem>
+                    <MenuItem onClick={() => { navigate('/settings'); setOpenMenu(null); }}>Settings</MenuItem>
+                    <MenuItem onClick={() => { handleLogout(); setOpenMenu(null); }}>Logout</MenuItem>
+                  </Paper>
+                </ClickAwayListener>
+              )}
+            </Box>
           </Box>
         )}
       </Toolbar>

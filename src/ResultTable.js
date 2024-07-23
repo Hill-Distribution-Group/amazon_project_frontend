@@ -1,33 +1,17 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Typography,
-  Modal,
-  Box,
-  Checkbox,
-  Tooltip,
-  IconButton,
-  Button,
-  TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  ListItemText
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
+  Typography, Modal, Box, Checkbox, Tooltip, IconButton, Button, TextField,
+  FormControl, Select, MenuItem, ListItemText
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import NotInterestedIcon from '@mui/icons-material/NotInterested';
 import OrderedJsonViewer from './OrderedJsonViewer';
 import ContextMenu from './ContextMenu';
 import { useSnackbar } from './SnackbarContext';
-import EnhancedFilterSortControls from './EnhancedFilterSortControls';
+import FilterControls from './FilterControls';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 
 const truncateText = (text, maxLength) => {
   return text && text.length > maxLength ? text.substring(0, maxLength) + '...' : text || '';
@@ -46,9 +30,9 @@ const ResultTable = ({
   users, 
   assignees, 
   onAssigneeChange,
-  showApprovalStatus = true,
   isPastResults = false,
   multipleAssignees = false,
+  onRejectSelected
 }) => {
   const { showSnackbar } = useSnackbar();
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -59,12 +43,15 @@ const ResultTable = ({
   const [contextMenu, setContextMenu] = useState({ mouseX: null, mouseY: null });
   const [selectedRowIndex, setSelectedRowIndex] = useState(null);
   const [filters, setFilters] = useState({});
-  const [sortConfig, setSortConfig] = useState({ field: '', direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
 
   const handleContextMenu = (event, index) => {
     event.preventDefault();
-    setContextMenu({ mouseX: event.clientX - 2, mouseY: event.clientY - 4 });
-    setSelectedRowIndex(index);
+    const product = data[index];
+    if (product['Approval Status'] !== 'pending' && product['Approval Status'] !== 'approved') {
+      setContextMenu({ mouseX: event.clientX - 2, mouseY: event.clientY - 4 });
+      setSelectedRowIndex(index);
+    }
   };
 
   const handleCloseContextMenu = () => {
@@ -72,10 +59,10 @@ const ResultTable = ({
     setSelectedRowIndex(null);
   };
 
-  const handleAssigneeChange = (event, asin) => {
+  const handleAssigneeChange = (event, ID) => {
     event.stopPropagation();
     const value = event.target.value;
-    onAssigneeChange(asin, multipleAssignees ? value : value[value.length - 1]);
+    onAssigneeChange(ID, multipleAssignees ? value : value[value.length - 1]);
   };
 
   const handleDecisionChange = async (newDecision) => {
@@ -102,7 +89,7 @@ const ResultTable = ({
   const handleCheckboxChange = (product) => {
     setSelectedProducts((prevSelected) => ({
       ...prevSelected,
-      [product.ASIN]: !prevSelected[product.ASIN]
+      [product.ID]: !prevSelected[product.ID]
     }));
   };
 
@@ -110,13 +97,13 @@ const ResultTable = ({
     const isChecked = event.target.checked;
     const newSelectedProducts = {};
     data.forEach((item) => {
-      newSelectedProducts[item.ASIN] = isChecked;
+      newSelectedProducts[item.ID] = isChecked;
     });
     setSelectedProducts(newSelectedProducts);
   };
-  
+
   const handleSaveSelected = async () => {
-    const selectedItems = data.filter((item) => selectedProducts[item.ASIN]);
+    const selectedItems = data.filter((item) => selectedProducts[item.ID]);
     if (selectedItems.length === 0) {
       showSnackbar("No items selected.", 'warning');
       return;
@@ -125,9 +112,6 @@ const ResultTable = ({
       const response = await onSaveSelected(selectedItems);
       if (response && response.success) {
         showSnackbar(response.message || "Selected items saved successfully.", 'success');
-        setData((prevData) => prevData.map((item) => 
-          selectedProducts[item.ASIN] ? { ...item, is_sent_for_approval: true } : item
-        ));
         setSelectedProducts({});
       } else {
         showSnackbar(response?.message || "Error saving selected items. Please try again.", 'error');
@@ -139,16 +123,25 @@ const ResultTable = ({
   };
 
   const handleRemoveSelected = () => {
-    const selectedItems = data.filter((item) => selectedProducts[item.ASIN]);
+    const selectedItems = data.filter((item) => selectedProducts[item.ID]);
     onRemoveSelected(selectedItems);
+    setSelectedProducts({});
+  };
+
+  const handleRejectSelected = () => {
+    const selectedItems = data.filter((item) => selectedProducts[item.ID]);
+    onRejectSelected(selectedItems);
     setSelectedProducts({});
   };
 
   const handleCommentEdit = (event, index) => {
     event.stopPropagation();
-    setCommentProductIndex(index);
-    setCurrentComment(data[index].Comment || '');
-    setCommentModalOpen(true);
+    const product = data[index];
+    if (product['Approval Status'] !== 'pending') {
+      setCommentProductIndex(index);
+      setCurrentComment(product.Comment || '');
+      setCommentModalOpen(true);
+    }
   };
   
   const handleCommentClose = () => setCommentModalOpen(false);
@@ -167,16 +160,14 @@ const ResultTable = ({
     setFilters(newFilters);
   };
 
-  const handleSortChange = (field, direction) => {
-    setSortConfig({ field, direction });
-  };
-
   const columns = useMemo(() => {
-    const baseColumns = [
+    let baseColumns = [
+      { field: "ID", headerName: "ID" },
       { field: "Search Query", headerName: "Search Query" },
       { field: "ASIN", headerName: "ASIN" },
       { field: "Amazon Product Name", headerName: "Product Name" },
       { field: "Matching Percentage", headerName: "Match %" },
+      { field: "Counter Party", headerName: "Counter Party" },
       { field: "Cost of Goods", headerName: "CoG" },
       { field: "VAT Rate", headerName: "VAT %" },
       { field: "Sales Volume", headerName: "Sales Volume" },
@@ -192,23 +183,32 @@ const ResultTable = ({
       { field: "Expected Total Net Profit FBA", headerName: "Exp. Profit FBA" },
       { field: "Expected Total Net Profit FBM", headerName: "Exp. Profit FBM" },
       { field: "Is Sold by Amazon", headerName: "Sold by Amazon" },
-      { field: "Decision", headerName: "Decision" }
+      { field: "Decision", headerName: "Decision" },
+      { field: "Comment", headerName: "Comment" }
     ];
 
-    if (!isPastResults) {
-      baseColumns.push({ field: "Comment", headerName: "Comment" });
+    if (isPastResults) {
+      baseColumns = [
+        { field: "Created At", headerName: "Created At" },
+        { field: "User ID", headerName: "User ID" },
+        ...baseColumns
+      ];
     }
 
     if (isSavedResults) {
       baseColumns.push({ field: "Sent to Approval at", headerName: "Sent to Approval" });
     }
 
-    if (showApprovalStatus && !isPastResults) {
-      baseColumns.push({ field: "Is Sent for Approval", headerName: "Approval Status" });
-    }
-
     return baseColumns;
-  }, [isSavedResults, isPastResults, showApprovalStatus]);
+  }, [isSavedResults, isPastResults]);
+  
+  const handleSort = (key) => {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
 
   const filteredAndSortedData = useMemo(() => {
     let result = data;
@@ -216,20 +216,30 @@ const ResultTable = ({
     // Apply filters
     Object.entries(filters).forEach(([field, value]) => {
       if (value) {
-        result = result.filter(item => 
-          String(item[field]).toLowerCase().includes(value.toLowerCase())
-        );
+        if (field === 'quickFilter') {
+          // Apply quick filter across all fields
+          result = result.filter(item => 
+            Object.values(item).some(val => 
+              String(val).toLowerCase().includes(value.toLowerCase())
+            )
+          );
+        } else {
+          // Apply specific field filter
+          result = result.filter(item => 
+            String(item[field]).toLowerCase().includes(value.toLowerCase())
+          );
+        }
       }
     });
 
     // Apply sorting
-    if (sortConfig.field) {
+    if (sortConfig.key) {
       result.sort((a, b) => {
-        if (a[sortConfig.field] < b[sortConfig.field]) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
         }
-        if (a[sortConfig.field] > b[sortConfig.field]) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
         }
         return 0;
       });
@@ -239,8 +249,13 @@ const ResultTable = ({
   }, [data, filters, sortConfig]);
 
   const renderCell = (item, column) => {
+    if (!item || typeof item !== 'object') {
+      console.error("Invalid item:", item);
+      return "N/A";
+    }
+
     const value = item[column.field];
-  
+
     if (column.field === "Amazon Product Name" || column.field === "Search Query") {
       return (
         <Tooltip title={value || ''}>
@@ -256,14 +271,18 @@ const ResultTable = ({
         </span>
       );
     } else if (column.field === 'VAT Rate') {
-      return `${formatValue(value)*100}%`; // Added this case for VAT Rate
+      return `${formatValue(value) * 100}%`;
     } else if (column.field === 'Comment') {
       return (
         <Box display="flex" alignItems="center">
           <Tooltip title={value || 'No comment'}>
             <span>{truncateText(value || '', 20)}</span>
           </Tooltip>
-          <IconButton size="small" onClick={(e) => handleCommentEdit(e, data.indexOf(item))} disabled={item['Is Sent for Approval']}>
+          <IconButton 
+            size="small" 
+            onClick={(e) => handleCommentEdit(e, data.indexOf(item))}
+            disabled={item['Approval Status'] === 'pending' || item['Approval Status'] === 'approved'}
+          >
             <EditIcon fontSize="small" />
           </IconButton>
         </Box>
@@ -276,8 +295,6 @@ const ResultTable = ({
           {value}
         </span>
       );
-    } else if (column.field === "Is Sent for Approval") {
-      return value ? <CheckCircleOutlineIcon style={{ color: 'green' }} /> : <NotInterestedIcon style={{ color: 'red' }} />;
     } else {
       return formatValue(value);
     }
@@ -286,10 +303,9 @@ const ResultTable = ({
   return (
     <>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <EnhancedFilterSortControls
+        <FilterControls
           columns={columns}
           onFilterChange={handleFilterChange}
-          onSortChange={handleSortChange}
         />
         <Box display="flex" gap={1}>
           {!isPastResults && (
@@ -303,9 +319,20 @@ const ResultTable = ({
               {isSavedResults ? 'Approve Selected Items' : 'Send for Approval'}
             </Button>
           )}
+          {isSavedResults && (
+            <Button
+              variant="contained"
+              color="secondary"
+              onClick={handleRejectSelected}
+              disabled={Object.values(selectedProducts).filter(Boolean).length === 0}
+              sx={{ padding: '6px 12px' }}
+            >
+              Reject Selected Items
+            </Button>
+          )}
           <Button
             variant="contained"
-            color="secondary"
+            color="error"
             onClick={handleRemoveSelected}
             startIcon={<DeleteIcon />}
             disabled={Object.values(selectedProducts).filter(Boolean).length === 0}
@@ -323,12 +350,23 @@ const ResultTable = ({
               <TableCell align="center">
                 <Checkbox
                   indeterminate={Object.values(selectedProducts).some(Boolean) && Object.values(selectedProducts).some(value => !value)}
-                  checked={Object.values(selectedProducts).every(Boolean)}
+                  checked={Object.values(selectedProducts).every(Boolean) && Object.keys(selectedProducts).length > 0}
                   onChange={handleSelectAll}
                 />
               </TableCell>
               {columns.map((column) => (
-                <TableCell key={column.field}>{column.headerName}</TableCell>
+                <TableCell 
+                  key={column.field}
+                  onClick={() => handleSort(column.field)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <Box display="flex" alignItems="center">
+                    {column.headerName}
+                    {sortConfig.key === column.field && (
+                      sortConfig.direction === 'ascending' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                    )}
+                  </Box>
+                </TableCell>
               ))}
               {isSavedResults && <TableCell align="center">Assignee(s)</TableCell>}
             </TableRow>
@@ -337,21 +375,16 @@ const ResultTable = ({
             {filteredAndSortedData.map((product, index) => (
               <TableRow
                 hover
-                key={index}
+                key={product.ID}
                 onClick={() => handleRowClick(product)}
                 onContextMenu={(e) => handleContextMenu(e, index)}
-                style={{
-                  cursor: product['Is Sent for Approval'] ? 'not-allowed' : 'pointer',
-                  backgroundColor: product['Is Sent for Approval'] ? '#e0e0e0' : 'inherit',
-                  opacity: product['Is Sent for Approval'] ? 0.7 : 1,
-                }}
               >
                 <TableCell align="center">
                   <Checkbox
-                    checked={!!selectedProducts[product.ASIN]}
+                    checked={!!selectedProducts[product.ID]}
                     onChange={() => handleCheckboxChange(product)}
                     onClick={(e) => e.stopPropagation()}
-                  />
+                    />
                 </TableCell>
                 {columns.map(column => (
                   <TableCell key={column.field}>
@@ -363,8 +396,8 @@ const ResultTable = ({
                     <FormControl fullWidth>
                       <Select
                         multiple={multipleAssignees}
-                        value={assignees[product.ASIN] || (multipleAssignees ? [] : '')}
-                        onChange={(e) => handleAssigneeChange(e, product.ASIN)}
+                        value={assignees[product.ID] || (multipleAssignees ? [] : '')}
+                        onChange={(e) => handleAssigneeChange(e, product.ID)}
                         onClick={(e) => e.stopPropagation()}
                         renderValue={(selected) => {
                           if (multipleAssignees) {
@@ -375,7 +408,7 @@ const ResultTable = ({
                       >
                         {users.map((user) => (
                           <MenuItem key={user.id} value={user.id}>
-                            {multipleAssignees && <Checkbox checked={assignees[product.ASIN]?.indexOf(user.id) > -1} />}
+                            {multipleAssignees && <Checkbox checked={assignees[product.ID]?.indexOf(user.id) > -1} />}
                             <ListItemText primary={user.username} />
                           </MenuItem>
                         ))}
@@ -394,80 +427,80 @@ const ResultTable = ({
         onClose={handleCloseModal}
         aria-labelledby="modal-modal-title"
         aria-describedby="modal-modal-description"
-        >
-          <Box sx={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: '90%',
-            maxHeight: '90%',
-            bgcolor: 'background.paper',
-            border: '2px solid #000',
-            boxShadow: 24,
-            overflow: 'auto',
-            p: 4,
-          }}>
-            <Typography id="modal-modal-title" variant="h6" component="h2">
-              Full Product Details
-            </Typography>
-            <Box
-              id="modal-modal-description"
-              sx={{ marginTop: '16px', maxHeight: '80vh', overflow: 'auto' }}
-            >
-              <OrderedJsonViewer data={selectedProduct} />
-            </Box>
+      >
+        <Box sx={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '90%',
+          maxHeight: '90%',
+          bgcolor: 'background.paper',
+          border: '2px solid #000',
+          boxShadow: 24,
+          overflow: 'auto',
+          p: 4,
+        }}>
+          <Typography id="modal-modal-title" variant="h6" component="h2">
+            Full Product Details
+          </Typography>
+          <Box
+            id="modal-modal-description"
+            sx={{ marginTop: '16px', maxHeight: '80vh', overflow: 'auto' }}
+          >
+            <OrderedJsonViewer data={selectedProduct} />
           </Box>
-        </Modal>
-  
-        <Modal
-          open={commentModalOpen}
-          onClose={handleCommentClose}
-          aria-labelledby="comment-modal-title"
-          aria-describedby="comment-modal-description"
-        >
-          <Box sx={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: 400,
-            bgcolor: 'background.paper',
-            border: '2px solid #000',
-            boxShadow: 24,
-            p: 4,
-          }}>
-            <Typography id="comment-modal-title" variant="h6" component="h2">
-              Edit Comment
-            </Typography>
-            <TextField
-              fullWidth
-              multiline
-              rows={4}
-              value={currentComment}
-              onChange={(e) => setCurrentComment(e.target.value)}
-              margin="normal"
-            />
-            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button onClick={handleCommentSave} color="primary" variant="contained">
-                Save
-              </Button>
-            </Box>
+        </Box>
+      </Modal>
+
+      <Modal
+        open={commentModalOpen}
+        onClose={handleCommentClose}
+        aria-labelledby="comment-modal-title"
+        aria-describedby="comment-modal-description"
+      >
+        <Box sx={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 400,
+          bgcolor: 'background.paper',
+          border: '2px solid #000',
+          boxShadow: 24,
+          p: 4,
+        }}>
+          <Typography id="comment-modal-title" variant="h6" component="h2">
+            Edit Comment
+          </Typography>
+          <TextField
+            fullWidth
+            multiline
+            rows={4}
+            value={currentComment}
+            onChange={(e) => setCurrentComment(e.target.value)}
+            margin="normal"
+          />
+          <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button onClick={handleCommentSave} color="primary" variant="contained">
+              Save
+            </Button>
           </Box>
-        </Modal>
-  
-        <ContextMenu
-          anchorPosition={
-            contextMenu.mouseY !== null && contextMenu.mouseX !== null
-              ? { top: contextMenu.mouseY, left: contextMenu.mouseX }
-              : undefined
-          }
-          isOpen={contextMenu.mouseY !== null}
-          onClose={handleCloseContextMenu}
-          onDecisionChange={handleDecisionChange}
-        />
-      </>
-    );
-  };
-  
-  export default ResultTable;
+        </Box>
+      </Modal>
+
+      <ContextMenu
+        anchorPosition={
+          contextMenu.mouseY !== null && contextMenu.mouseX !== null
+            ? { top: contextMenu.mouseY, left: contextMenu.mouseX }
+            : undefined
+        }
+        isOpen={contextMenu.mouseY !== null}
+        onClose={handleCloseContextMenu}
+        onDecisionChange={handleDecisionChange}
+      />
+    </>
+  );
+};
+
+export default ResultTable;

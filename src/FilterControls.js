@@ -3,20 +3,17 @@ import {
   Box,
   TextField,
   InputAdornment,
-  IconButton,
   Typography,
   Popover,
   Button,
   Chip,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
-import SortIcon from '@mui/icons-material/Sort';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ClearIcon from '@mui/icons-material/Clear';
 
-const EnhancedFilterSortControls = ({ columns, onFilterChange, onSortChange }) => {
+const FilterControls = ({ columns, onFilterChange }) => {
   const [filters, setFilters] = useState({});
-  const [sortConfig, setSortConfig] = useState({ field: '', direction: 'asc' });
   const [anchorEl, setAnchorEl] = useState(null);
 
   const initialVisibleFilters = [];
@@ -25,12 +22,6 @@ const EnhancedFilterSortControls = ({ columns, onFilterChange, onSortChange }) =
     const newFilters = { ...filters, [field]: value };
     setFilters(newFilters);
     onFilterChange(newFilters);
-  };
-
-  const handleSortChange = (field) => {
-    const direction = field === sortConfig.field && sortConfig.direction === 'asc' ? 'desc' : 'asc';
-    setSortConfig({ field, direction });
-    onSortChange(field, direction);
   };
 
   const handleExpandFilters = (event) => {
@@ -43,9 +34,7 @@ const EnhancedFilterSortControls = ({ columns, onFilterChange, onSortChange }) =
 
   const handleClearFilters = () => {
     setFilters({});
-    setSortConfig({ field: '', direction: 'asc' });
     onFilterChange({});
-    onSortChange('', 'asc');
   };
 
   const renderFilterField = (column) => (
@@ -62,21 +51,6 @@ const EnhancedFilterSortControls = ({ columns, onFilterChange, onSortChange }) =
             <SearchIcon />
           </InputAdornment>
         ),
-        endAdornment: (
-          <InputAdornment position="end">
-            <IconButton
-              onClick={() => handleSortChange(column.field)}
-              edge="end"
-            >
-              <SortIcon
-                sx={{
-                  transform: sortConfig.field === column.field && sortConfig.direction === 'desc' ? 'rotate(180deg)' : 'none',
-                  color: sortConfig.field === column.field ? 'primary.main' : 'inherit',
-                }}
-              />
-            </IconButton>
-          </InputAdornment>
-        ),
       }}
     />
   );
@@ -84,7 +58,7 @@ const EnhancedFilterSortControls = ({ columns, onFilterChange, onSortChange }) =
   return (
     <Box sx={{ mb: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6" sx={{ mr: 2 }}>Filters & Sorting</Typography>
+        <Typography variant="h6" sx={{ mr: 2 }}>Filters</Typography>
         <Button
           variant="outlined"
           startIcon={<FilterListIcon />}
@@ -144,4 +118,4 @@ const EnhancedFilterSortControls = ({ columns, onFilterChange, onSortChange }) =
   );
 };
 
-export default EnhancedFilterSortControls;
+export default FilterControls;

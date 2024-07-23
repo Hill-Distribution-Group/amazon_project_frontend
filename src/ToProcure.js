@@ -50,6 +50,7 @@ const ToProcure = () => {
     }
   };
 
+
   if (error) {
     return (
       <Box width="100%">
@@ -64,7 +65,7 @@ const ToProcure = () => {
     <ThemeProvider theme={theme}>
       <PageContainer>
         <StyledHeader>
-          <Box sx={{ width: '33%' }} /> {/* Left spacer */}
+          <Box sx={{ width: '33%' }} />
           <HeaderTitle variant="h5" component="h1" color="textPrimary">
             Items To Procure
           </HeaderTitle>

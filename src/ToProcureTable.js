@@ -12,14 +12,17 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import OrderedJsonViewer from './OrderedJsonViewer';
-import EnhancedFilterSortControls from './EnhancedFilterSortControls';
 import { useSnackbar } from './SnackbarContext';
+import FilterControls from './FilterControls';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import BlockIcon from '@mui/icons-material/Block';
 
 const ToProcureTable = ({ data, setData, onSaveSelected }) => {
   const [selectedProducts, setSelectedProducts] = useState({});
   const [editedData, setEditedData] = useState({});
   const [filters, setFilters] = useState({});
-  const [sortConfig, setSortConfig] = useState({ field: '', direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const [poDialogOpen, setPoDialogOpen] = useState(false);
   const [poDetails, setPoDetails] = useState([]);
   const [contextMenu, setContextMenu] = useState(null);
@@ -58,12 +61,14 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
     setSelectedProducts(newSelectedProducts);
   };
 
-  const handleEdit = () => {
-    if (contextMenu) {
-      setEditingItem({ ...contextMenu.product });
-      setEditDialogOpen(true);
-      handleCloseContextMenu();
-    }
+  const handleEdit = (item) => {
+    console.log('Editing item:', item);
+    setEditingItem({
+      ...item,
+      'Cost of Goods': item['Cost of Goods'] || '',
+      Quantity: item.Quantity || ''
+    });
+    setEditDialogOpen(true);
   };
 
   const handleInputChange = (field, value) => {
@@ -75,8 +80,7 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
 
   const handleUpdate = async () => {
     try {
-      const response = await api.put('/api/to_procure/update_to_procure_item', editingItem);
-      
+      const response = await api.put(`/api/to_procure/update_to_procure_item`, editingItem);
       if (response.data.status === "moved_to_saved_results") {
         setData(prevData => prevData.filter(item => item.ID !== editingItem.ID));
         showSnackbar("Item moved back to SavedResults due to margin decrease.", 'warning');
@@ -84,7 +88,6 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
         setData(prevData => prevData.map(item => item.ID === editingItem.ID ? response.data.item : item));
         showSnackbar("Item updated successfully.", 'success');
       }
-      
       setEditDialogOpen(false);
       setEditingItem(null);
     } catch (error) {
@@ -97,9 +100,6 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
     setFilters(newFilters);
   };
 
-  const handleSortChange = (field, direction) => {
-    setSortConfig({ field, direction });
-  };
 
   const handlePoDialogClose = () => {
     setPoDialogOpen(false);
@@ -234,10 +234,35 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
     handlePoDialogClose();
   };
 
+
+  const handleCantProcure = async () => {
+    const selectedItems = Object.keys(selectedProducts)
+    .filter(id => selectedProducts[id])
+    .map(id => ({ ID: id }));
+
+    if (selectedItems.length === 0) {
+      showSnackbar("No items selected for can't procure.", 'warning');
+      return;
+    }
+
+    try {
+      console.log('selectedItems:', selectedItems);
+      const response = await api.post('/api/to_procure/cant_procure', { items: selectedItems });
+      showSnackbar(response.data.message || 'Items marked as cannot procure', 'success');
+      // Update the local state to remove the items marked as can't procure
+      setData(prevData => prevData.filter(item => !selectedItems.some(selectedItem => selectedItem.ID === item.ID)));
+      setSelectedProducts({});
+    } catch (error) {
+      console.error('Error marking items as cannot procure:', error);
+      showSnackbar(error.response?.data?.message || 'Failed to mark items as cannot procure. Please try again.', 'error');
+    }
+  };
+
+
   const handleRemoveItems = async () => {
     const itemsToRemove = Object.keys(selectedProducts)
       .filter(id => selectedProducts[id])
-      .map(id => ({ id: id }));
+      .map(id => ({ ID: id }));
 
     if (itemsToRemove.length === 0) {
       showSnackbar("No items selected for removal.", 'warning');
@@ -275,9 +300,10 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
   };
 
   const columns = useMemo(() => [
-    { field: 'ASIN', headerName: 'ASIN' },
+    { field: 'ID', headerName: 'ID' },
     { field: 'Product SKU', headerName: 'SKU' },
     { field: 'Amazon Product Name', headerName: 'Product Name' },
+    { field: 'ASIN', headerName: 'ASIN' },
     { field: 'Cost of Goods', headerName: 'Cost of Goods', editable: true },
     { field: 'Quantity', headerName: 'Quantity', editable: true },
     { field: 'VAT Rate', headerName: 'VAT Rate' },
@@ -293,6 +319,14 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
     { field: 'Decision', headerName: 'Decision' }
   ], []);
 
+  const handleSort = (key) => {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
   const filteredAndSortedData = useMemo(() => {
     let result = data;
 
@@ -306,13 +340,13 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
     });
 
     // Apply sorting
-    if (sortConfig.field) {
+    if (sortConfig.key) {
       result.sort((a, b) => {
-        if (a[sortConfig.field] < b[sortConfig.field]) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
         }
-        if (a[sortConfig.field] > b[sortConfig.field]) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
         }
         return 0;
       });
@@ -364,15 +398,25 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
     return <span style={cellStyle}>{value}</span>;
   };
 
+  
   return (
     <>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <EnhancedFilterSortControls
+        <FilterControls
           columns={columns}
           onFilterChange={handleFilterChange}
-          onSortChange={handleSortChange}
         />
         <Box display="flex" gap={1}>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={handleCantProcure}
+            startIcon={<BlockIcon />}
+            disabled={Object.keys(selectedProducts).filter(id => selectedProducts[id]).length === 0}
+            sx={{ padding: '6px 12px' }}
+          >
+            Can't Procure
+          </Button>
           <Button
             variant="contained"
             color="secondary"
@@ -398,7 +442,18 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
                 />
               </TableCell>
               {columns.map((column) => (
-                <TableCell key={column.field}>{column.headerName}</TableCell>
+                <TableCell 
+                  key={column.field}
+                  onClick={() => handleSort(column.field)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <Box display="flex" alignItems="center">
+                    {column.headerName}
+                    {sortConfig.key === column.field && (
+                      sortConfig.direction === 'ascending' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                    )}
+                  </Box>
+                </TableCell>
               ))}
             </TableRow>
           </TableHead>
@@ -438,11 +493,11 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
             : undefined
         }
       >
-        <MenuItem onClick={handleEdit}>Edit Item</MenuItem>
-        <MenuItem onClick={handleCreatePO}>Create Purchase Order</MenuItem>
+    <MenuItem onClick={() => handleEdit(contextMenu.product)}>Edit Item</MenuItem>
+    <MenuItem onClick={handleCreatePO}>Create Purchase Order</MenuItem>
       </Menu>
 
-      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="md"  >
+      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="md">
         <DialogTitle>Edit Item</DialogTitle>
         <DialogContent>
           {editingItem && (

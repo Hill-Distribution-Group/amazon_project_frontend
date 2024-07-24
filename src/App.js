@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline, Snackbar, Alert,Grid,Box,Typography,Paper } from '@mui/material';
 import { Routes, Route, Navigate } from 'react-router-dom';
+
 import LoginForm from './LoginForm';
 import ProcurementBoard from './ProcurementBoard';
 import Header from './Header';
@@ -14,6 +15,10 @@ import HelpPage from './HelpPage';
 import SupplierManagement from './SupplierManagement';
 import PurchaseOrders from './PurchaseOrders';
 import Dashboard from './Dashboard';
+import Inventory from './Inventory';
+import ProductMapping from './ProductMapping';
+import ProductCatalog from './ProductCatalog';
+
 import { SnackbarProvider, useSnackbar } from './SnackbarContext';
 import { LoadingProvider, useLoading } from './LoadingContext';
 import LoadingOverlay from './LoadingOverlay';
@@ -115,6 +120,9 @@ const AppContent = () => {
           <Route path="/help" element={<HelpPage />} />
           <Route path="/supplier-management" element={<SupplierManagement />} />
           <Route path="/purchase-orders" element={<PurchaseOrders />} />
+          <Route path="/inventory" element={<Inventory />} />
+          <Route path="/product-mapping" element={<ProductMapping />} />
+          <Route path="/product-catalog" element={<ProductCatalog />} />
         </Routes>
       </ContentContainer>
       <Footer />

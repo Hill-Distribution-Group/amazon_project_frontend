@@ -55,6 +55,8 @@ const Header = ({ isLoggedIn, onLogout }) => {
     inventory: [
       { label: 'Stock Overview', path: '/stock-overview' },
       { label: 'Product Catalog', path: '/product-catalog' },
+      { label: 'Inventory Management', path: '/inventory' },  // Add this line
+      { label: 'Product Mapping', path: '/product-mapping' }, // Add this line
       { label: 'Inventory Adjustments', path: '/inventory-adjustments' },
       { label: 'Low Stock Alerts', path: '/low-stock-alerts' },
       { label: 'Warehouse Management', path: '/warehouse-management' },

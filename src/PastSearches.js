@@ -62,6 +62,7 @@ const PastSearches = () => {
           onRemoveSelected={handleRemoveFromPast}
           isSavedResults={false}
           isPastResults={true}
+          
         />
       ) : (
         <Typography variant="body1">No search history found.</Typography>

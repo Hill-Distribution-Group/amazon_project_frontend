@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo,useCallback } from 'react';
 import { 
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField,
-  Typography, Box, Tooltip
+   Box, Tooltip
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useSnackbar } from './SnackbarContext';
 import api from './api';
-import theme, { 
+import  { 
   PageContainer, 
   ContentContainer, 
   ResultsContainer, 
@@ -34,11 +34,7 @@ const ProductCatalog = () => {
   const { showSnackbar } = useSnackbar();
   
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
       const response = await api.get('/api/product_catalog/get_products');
       if (response.status === 200) {
@@ -50,7 +46,11 @@ const ProductCatalog = () => {
       console.error('Error fetching products:', error);
       showSnackbar('Failed to fetch products', 'error');
     }
-  };
+  }, [showSnackbar]);
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
 
   const handleOpen = (product = null) => {
     if (product) {
@@ -216,7 +216,7 @@ const ProductCatalog = () => {
 
                     <TableCell>
                       <Tooltip title={product.name || ''} arrow>
-                        <span>{truncateText(product.name, 20)}</span>
+                        <span>{product.name}</span>
                       </Tooltip>
                     </TableCell>
                     <TableCell>

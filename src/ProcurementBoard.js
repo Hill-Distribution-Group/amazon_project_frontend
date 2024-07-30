@@ -61,6 +61,7 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
   const [rejectedResults, setRejectedResults] = useState([]);
   const [approvedResults, setApprovedResults] = useState([]);
   const [cantProcureResults, setCantProcureResults] = useState([]);
+  const [cantListedResults, setCantListedResults] = useState([]);
 
   const handleResultTabChange = (event, newValue) => {
     setResultTabValue(newValue);
@@ -108,6 +109,7 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
         setRejectedResults(allResults.filter(item => item['Approval Status'] === 'rejected'));
         setApprovedResults(allResults.filter(item => item['Approval Status'] === 'approved'));
         setCantProcureResults(allResults.filter(item => item['Approval Status'] === 'cant_procured'));
+        setCantListedResults(allResults.filter(item => item['Approval Status'] === 'cant_listed'));
       }
     } catch (error) {
       console.error('Error fetching search results:', error);
@@ -264,7 +266,6 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
       setLoading(false);
     }
   }, [addLog, showSnackbar, resetInputValues]);
-
 
   // Form Submission and Processing
   const handleSubmit = useCallback(async () => {
@@ -554,14 +555,15 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
         <ResultsContainer>
           <Typography variant="h5" gutterBottom>Results</Typography>
           {localLoading && <LinearProgress sx={{ mb: 2 }} />}
-          {!localLoading && (results.length > 0 || pendingResults.length > 0 || rejectedResults.length > 0 || approvedResults.length > 0 || cantProcureResults.length > 0) && (
+          {!localLoading && (results.length > 0 || pendingResults.length > 0 || rejectedResults.length > 0 || approvedResults.length > 0 || cantProcureResults.length > 0 || cantListedResults.length > 0) && (
             <>
               <Tabs value={resultTabValue} onChange={handleResultTabChange} sx={{ mb: 2 }}>
-                <Tab label={`New Results (${results.length})`} />
+                <Tab label={`New Results`} />
                 <Tab label={`Pending (${pendingResults.length})`} />
                 <Tab label={`Rejected (${rejectedResults.length})`} />
                 <Tab label={`Approved (${approvedResults.length})`} />
                 <Tab label={`Can't Procure (${cantProcureResults.length})`} />
+                <Tab label={`Can't Listed (${cantListedResults.length})`} />
               </Tabs>
               {resultTabValue === 0 && (
                 <ResultTable
@@ -572,6 +574,7 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
                   onDecisionUpdate={handleDashboardDecisionUpdate}
                   onCommentUpdate={handleCommentUpdate}
                   isSavedResults={false}
+                  showRemoveButton={true}
                 />
               )}
               {resultTabValue === 1 && (
@@ -583,6 +586,7 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
                   onDecisionUpdate={handleDashboardDecisionUpdate}
                   onCommentUpdate={handleCommentUpdate}
                   isSavedResults={false}
+                  showSendForApprovalButton={false}
                 />
               )}
               {resultTabValue === 2 && (
@@ -605,6 +609,7 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
                   onDecisionUpdate={handleDashboardDecisionUpdate}
                   onCommentUpdate={handleCommentUpdate}
                   isSavedResults={false}
+                  showSendForApprovalButton={false}
                 />
               )}
               {resultTabValue === 4 && (
@@ -616,13 +621,25 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
                   onDecisionUpdate={handleDashboardDecisionUpdate}
                   onCommentUpdate={handleCommentUpdate}
                   isSavedResults={false}
+                  showSendForApprovalButton={false}
+                />
+              )}
+              {resultTabValue === 5 && (
+                <ResultTable
+                  data={cantListedResults}
+                  setData={setCantListedResults}
+                  onSaveSelected={handleSaveSelected}
+                  onRemoveSelected={handleRemoveSelected}
+                  onDecisionUpdate={handleDashboardDecisionUpdate}
+                  onCommentUpdate={handleCommentUpdate}
+                  isSavedResults={false}
+                  showSendForApprovalButton={false}
                 />
               )}
             </>
           )}
         </ResultsContainer>
       </ContentContainer>
-
 
       <LogDrawer
         anchor="right"

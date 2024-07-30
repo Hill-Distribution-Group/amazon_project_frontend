@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo,useCallback } from 'react';
 import { 
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField,
-  Typography, Box, Select, MenuItem,Tooltip
+   Box, Select, MenuItem,Tooltip
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useSnackbar } from './SnackbarContext';
 import api from './api';
-import theme, { 
+import { 
   PageContainer, 
   ContentContainer, 
   ResultsContainer, 
@@ -34,16 +34,12 @@ const ProductMapping = () => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const { showSnackbar } = useSnackbar();
 
-  useEffect(() => {
-    fetchMappings();
-  }, []);
 
-  const fetchMappings = async () => {
+  const fetchMappings = useCallback(async () => {
     try {
       const response = await api.get('/api/product_mapping/get_mappings');
       if (response.status === 200) {
         setMappings(response.data);
-        console.log(mappings);
       } else {
         showSnackbar('Failed to fetch product mappings', 'error');
       }
@@ -51,7 +47,11 @@ const ProductMapping = () => {
       console.error('Error fetching product mappings:', error);
       showSnackbar('Failed to fetch product mappings', 'error');
     }
-  };
+  }, [showSnackbar]);
+
+  useEffect(() => {
+    fetchMappings();
+  }, [fetchMappings]);
 
   const handleOpen = (mapping = null) => {
     if (mapping) {
@@ -79,10 +79,6 @@ const ProductMapping = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const truncateText = (text, maxLength) => {
-    if (!text) return '';
-    return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
-  };
 
   const handleSubmit = async () => {
     try {
@@ -213,7 +209,7 @@ const ProductMapping = () => {
               <TableCell>{mapping.product_id}</TableCell>
               <TableCell>
                 <Tooltip title={mapping.name} arrow>
-                  <span>{truncateText(mapping.name, 20)}</span>
+                  <span>{mapping.name}</span>
                 </Tooltip>
               </TableCell>
               <TableCell>{mapping.channel}</TableCell>

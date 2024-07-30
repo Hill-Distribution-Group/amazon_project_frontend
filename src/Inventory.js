@@ -38,10 +38,7 @@ const Inventory = () => {
     fetchInventories();
   }, []);
 
-  const truncateText = (text, maxLength) => {
-    if (!text) return '';
-    return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
-  };
+ 
 
   const fetchInventories = async () => {
     try {
@@ -218,7 +215,7 @@ const Inventory = () => {
                     <TableCell>{inventory.sku}</TableCell>
                     <TableCell>
                       <Tooltip title={inventory.name} arrow>
-                        <span>{truncateText(inventory.name, 20)}</span>
+                        <span>{inventory.name}</span>
                       </Tooltip>
                     </TableCell>
                     <TableCell>{inventory.quantity}</TableCell>

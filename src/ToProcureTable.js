@@ -259,35 +259,6 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
   };
 
 
-  const handleRemoveItems = async () => {
-    const itemsToRemove = Object.keys(selectedProducts)
-      .filter(id => selectedProducts[id])
-      .map(id => ({ ID: id }));
-
-    if (itemsToRemove.length === 0) {
-      showSnackbar("No items selected for removal.", 'warning');
-      return;
-    }
-
-    try {
-      const response = await api.post('/api/to_procure/remove_to_procure_items', { items: itemsToRemove });
-      
-      if (response.status === 200) {
-        showSnackbar(response.data.message, 'success');
-        
-        const updatedData = data.filter(product => !selectedProducts[product.ID]);
-        setData(updatedData);
-        
-        setSelectedProducts({});
-      } else {
-        throw new Error(response.data.error || 'Failed to remove items');
-      }
-    } catch (error) {
-      console.error('Error removing items:', error);
-      showSnackbar(error.message || "Error removing items. Please try again.", 'error');
-    }
-  };
-
   const handleRowClick = (event, product) => {
     if (event.target.closest('input, select, .MuiCheckbox-root')) {
       return;
@@ -300,7 +271,6 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
   };
 
   const columns = useMemo(() => [
-    { field: 'ID', headerName: 'ID' },
     { field: 'Product SKU', headerName: 'SKU' },
     { field: 'Amazon Product Name', headerName: 'Product Name' },
     { field: 'ASIN', headerName: 'ASIN' },
@@ -416,16 +386,6 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
             sx={{ padding: '6px 12px' }}
           >
             Can't Procure
-          </Button>
-          <Button
-            variant="contained"
-            color="secondary"
-            onClick={handleRemoveItems}
-            startIcon={<DeleteIcon />}
-            disabled={Object.keys(selectedProducts).filter(id => selectedProducts[id]).length === 0}
-            sx={{ padding: '6px 12px' }}
-          >
-            Remove Selected
           </Button>
         </Box>
       </Box>

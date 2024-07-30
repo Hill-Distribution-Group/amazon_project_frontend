@@ -32,7 +32,9 @@ const ResultTable = ({
   onAssigneeChange,
   isPastResults = false,
   multipleAssignees = false,
-  onRejectSelected
+  onRejectSelected,
+  showRemoveButton = false,
+  showSendForApprovalButton = true
 }) => {
   const { showSnackbar } = useSnackbar();
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -162,7 +164,6 @@ const ResultTable = ({
 
   const columns = useMemo(() => {
     let baseColumns = [
-      { field: "ID", headerName: "ID" },
       { field: "Search Query", headerName: "Search Query" },
       { field: "ASIN", headerName: "ASIN" },
       { field: "Amazon Product Name", headerName: "Product Name" },
@@ -308,7 +309,7 @@ const ResultTable = ({
           onFilterChange={handleFilterChange}
         />
         <Box display="flex" gap={1}>
-          {!isPastResults && (
+          {!isPastResults && showSendForApprovalButton && (
             <Button
               variant="contained"
               color="primary"
@@ -330,16 +331,18 @@ const ResultTable = ({
               Reject Selected Items
             </Button>
           )}
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleRemoveSelected}
-            startIcon={<DeleteIcon />}
-            disabled={Object.values(selectedProducts).filter(Boolean).length === 0}
-            sx={{ padding: '6px 12px' }}
-          >
-            Remove Selected
-          </Button>
+          {showRemoveButton && (
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleRemoveSelected}
+              startIcon={<DeleteIcon />}
+              disabled={Object.values(selectedProducts).filter(Boolean).length === 0}
+              sx={{ padding: '6px 12px' }}
+            >
+              Remove Selected
+            </Button>
+          )}
         </Box>
       </Box>
 

@@ -3,6 +3,11 @@ import {
   Typography,
   Box,
   ThemeProvider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
 } from '@mui/material';
 import ResultTable from './ResultTable';
 import api from './api';
@@ -22,6 +27,8 @@ const ToApprove = () => {
   const [users, setUsers] = useState([]);
   const [assignees, setAssignees] = useState({});
   const { showSnackbar } = useSnackbar();
+  const [restrictedItems, setRestrictedItems] = useState([]);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const handleAssigneeChange = (ID, assigneeIds) => {
     setAssignees(prev => ({ ...prev, [ID]: assigneeIds }));
@@ -30,7 +37,16 @@ const ToApprove = () => {
   const fetchSavedItems = useCallback(async () => {
     try {
       const response = await api.get('/api/saved_results/get_saved_results');
-      setSavedItems(response.data);
+      const data = response.data;
+
+      // Create initial assignees based on User ID
+      const initialAssignees = data.reduce((acc, item) => {
+        acc[item.ID] = [item["User ID"]]; // Use "User ID" directly
+        return acc;
+      }, {});
+      setAssignees(initialAssignees);
+      setSavedItems(data);
+
     } catch (error) {
       console.error('Error fetching saved items:', error.response ? error.response.data : error);
       setError('Failed to load saved items. Please try again later.');
@@ -64,23 +80,34 @@ const ToApprove = () => {
         ...item,
         Assignees: assignees[item.ID]
       }));
-      await api.post('/api/saved_results/approve_saved_items', { items: itemsWithAssignees });
+      const response = await api.post('/api/saved_results/approve_saved_items', { items: itemsWithAssignees });
       
-      setSavedItems(prevItems => prevItems.filter(item => !selectedItems.some(selected => selected.ID === item.ID)));
+      if (response.data.items_with_restrictions && response.data.items_with_restrictions.length > 0) {
+        setRestrictedItems(response.data.items_with_restrictions);
+        setIsDialogOpen(true);
+      }
+
+      const approvedItemIds = response.data.approved_items || [];
+      setSavedItems(prevItems => prevItems.filter(item => !approvedItemIds.includes(item.ID)));
       
       const newAssignees = {...assignees};
-      selectedItems.forEach(item => {
-        delete newAssignees[item.ID];
+      approvedItemIds.forEach(id => {
+        delete newAssignees[id];
       });
       setAssignees(newAssignees);
   
-      showSnackbar('Items approved successfully.', 'success');
-      return { success: true, message: 'Items approved successfully.' };
+      showSnackbar('Items processed successfully.', 'success');
+      return { success: true, message: 'Items processed successfully.' };
     } catch (error) {
       console.error('Error approving items:', error);
       showSnackbar('Error approving items. Please try again.', 'error');
       return { success: false, message: 'Error approving items. Please try again.' };
     }
+  };
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setRestrictedItems([]);
   };
 
   const handleRejectSelected = async (selectedItems) => {
@@ -186,6 +213,22 @@ const ToApprove = () => {
             )}
           </ResultsContainer>
         </ContentContainer>
+        <Dialog open={isDialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+          <DialogTitle>Below items have been rejected due to listing restrictions</DialogTitle>
+          <DialogContent>
+            {restrictedItems.map((item, index) => (
+              <Box key={index} mb={2}>
+                <Typography variant="subtitle1">ASIN: {item.asin}</Typography>
+                <Typography variant="body1">{item.restrictions}</Typography>
+              </Box>
+            ))}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDialog} color="primary">
+              Close
+            </Button>
+          </DialogActions>
+        </Dialog>
       </PageContainer>
     </ThemeProvider>
   );

@@ -16,7 +16,11 @@ import {
   IconButton,
   Paper,
   Tooltip,
-  Autocomplete
+  Autocomplete,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -66,6 +70,8 @@ const SupplierManagement = () => {
     'Pet supplies',
     'Other'
   ];
+
+  const typeOptions = ['Wholesaler', 'Brand', 'Other'];
 
   const fetchSuppliers = useCallback(async () => {
     try {
@@ -354,24 +360,37 @@ const SupplierManagement = () => {
                 />
               </Grid>
               <Grid item xs={12}>
-                <TextField
-                  margin="dense"
-                  label="Type"
-                  type="text"
-                  fullWidth
-                  value={type}
-                  onChange={(e) => setType(e.target.value)}
-                  required
-                />
+              <FormControl fullWidth margin="dense" required>
+                  <InputLabel>Type</InputLabel>
+                  <Select
+                    value={type}
+                    onChange={(e) => setType(e.target.value)}
+                    label="Type"
+                  >
+                    {typeOptions.map((option) => (
+                      <MenuItem key={option} value={option}>{option}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
               <Grid item xs={12}>
-                <Autocomplete
+              <Autocomplete
                   options={productOptions}
                   value={product}
                   onChange={(event, newValue) => {
                     setProduct(newValue);
                   }}
-                  renderInput={(params) => <TextField {...params} label="Product" margin="dense" fullWidth />}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      label="Product" 
+                      margin="dense" 
+                      fullWidth 
+                      required
+                      error={!product}
+                      helperText={!product ? "Product is required" : ""}
+                    />
+                  )}
                 />
               </Grid>
               <Grid item xs={12}>

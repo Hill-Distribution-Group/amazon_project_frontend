@@ -184,8 +184,8 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
         return { success: true, message: response.data.message };
       }
     } catch (error) {
-      showSnackbar(error.response?.data?.message || 'Error sending items for approval. Please try again.', 'error');
-      return { success: false, message: error.response?.data?.message || 'Error sending items for approval' };
+      showSnackbar(error.response?.data?.error || 'Error sending items for approval. Please try again.', 'error');
+      return { success: false, message: error.response?.data?.error || 'Error sending items for approval' };
     }
   };
 

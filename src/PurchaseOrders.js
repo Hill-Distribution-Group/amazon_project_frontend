@@ -240,7 +240,7 @@ const PurchaseOrders = () => {
     } catch (error) {
       console.error('Error creating purchase order:', error);
       showSnackbar(
-        error.response?.data?.message ||
+        error.response?.data?.error ||
           'Failed to create purchase order. Please try again.',
         'error'
       );
@@ -331,7 +331,7 @@ const PurchaseOrders = () => {
     } catch (error) {
       console.error('Error updating purchase order:', error);
       showSnackbar(
-        error.response?.data?.message ||
+        error.response?.data?.error ||
           'Failed to update purchase order. Please try again.',
         'error'
       );

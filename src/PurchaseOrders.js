@@ -788,24 +788,25 @@ const PurchaseOrders = () => {
                             />
                           </TableCell>
                           <TableCell>
-                            <TextField
-                              type="number"
-                              value={item.unit_cost}
-                              onChange={(e) =>
-                                handleInputChange(
-                                  index,
-                                  'unit_cost',
-                                  parseFloat(e.target.value) || 0
-                                )
-                              }
-                              fullWidth
-                              InputProps={{
-                                startAdornment: (
-                                  <InputAdornment position="start">£</InputAdornment>
-                                ),
-                              }}
-                            />
-                          </TableCell>
+                          <TextField
+                            type="number"
+                            value={item.unit_cost}
+                            onChange={(e) =>
+                              handleInputChange(
+                                index,
+                                'unit_cost',
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                            fullWidth
+                            InputProps={{
+                              startAdornment: (
+                                <InputAdornment position="start">£</InputAdornment>
+                              ),
+                              inputProps: { min: 0 } // Add min attribute to prevent negative input
+                            }}
+                          />
+                        </TableCell>
                           <TableCell>
                             <FormControl fullWidth>
                               <Select

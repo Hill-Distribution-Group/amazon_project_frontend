@@ -23,7 +23,7 @@ const ToProcure = () => {
       setToProcureItems(response.data);
     } catch (error) {
       console.error('Error fetching to procure items:', error);
-      setError(error.response?.data?.message || 'Failed to load to procure items. Please try again later.');
+      setError(error.response?.data?.error || 'Failed to load to procure items. Please try again later.');
     }
   }, []);
 
@@ -44,12 +44,11 @@ const ToProcure = () => {
     } catch (error) {
       console.error('Error creating purchase order:', error);
       showSnackbar(
-        error.response?.data?.message || 'Failed to create purchase order. Please try again.',
+        error.response?.data?.error || 'Failed to create purchase order. Please try again.',
         'error'
       );
     }
   };
-
 
   if (error) {
     return (
@@ -80,6 +79,7 @@ const ToProcure = () => {
                 data={toProcureItems}
                 setData={setToProcureItems}
                 onSaveSelected={handleCreatePurchaseOrder}
+                fetchToProcureItems={fetchToProcureItems}
               />
             ) : (
               <Typography variant="body1">No items to procure found.</Typography>

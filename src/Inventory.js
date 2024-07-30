@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField,
-  Typography, Box, Tooltip, Select, MenuItem
+ Box, Tooltip, Select, MenuItem
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useSnackbar } from './SnackbarContext';
 import api from './api';
-import theme, { 
+import  { 
   PageContainer, 
   ContentContainer, 
   ResultsContainer, 
@@ -34,17 +34,11 @@ const Inventory = () => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const { showSnackbar } = useSnackbar();
 
-  useEffect(() => {
-    fetchInventories();
-  }, []);
-
- 
-
-  const fetchInventories = async () => {
+  const fetchInventories = useCallback(async () => {
     try {
       const response = await api.get('/api/inventory/get_inventories');
       if (response.status === 200) {
-        setInventories(response.data); // Removed [0] to use the entire response data
+        setInventories(response.data); 
       } else {
         showSnackbar('Failed to fetch inventories', 'error');
       }
@@ -52,7 +46,11 @@ const Inventory = () => {
       console.error('Error fetching inventories:', error);
       showSnackbar('Failed to fetch inventories', 'error');
     }
-  };
+  }, [showSnackbar]);
+
+  useEffect(() => {
+    fetchInventories();
+  }, [fetchInventories]);
 
   const handleOpen = (inventory = null) => {
     if (inventory) {
@@ -84,6 +82,11 @@ const Inventory = () => {
   };
 
   const handleSubmit = async () => {
+    if (!formData.product_id || !formData.quantity) {
+      showSnackbar('Product ID and Quantity are required', 'error');
+      return;
+    }
+
     try {
       if (editingId) {
         await api.put(`/api/inventory/update_inventory/${editingId}`, formData);
@@ -96,16 +99,16 @@ const Inventory = () => {
       fetchInventories();
     } catch (error) {
       console.error('Error updating/creating inventory:', error);
-      showSnackbar('Operation failed', 'error');
+      showSnackbar(error.response?.data?.error || 'Operation failed', 'error');
     }
   };
 
   const handleDelete = async (id) => {
     try {
       const response = await api.delete(`/api/inventory/delete_inventory/${id}`);
-      if (response.status === 200) { // Updated to check for status 200
+      if (response.status === 200) {
         showSnackbar('Inventory deleted successfully', 'success');
-        fetchInventories(); // Ensure inventories are refetched after deletion
+        fetchInventories();
       } else {
         showSnackbar('Failed to delete inventory', 'error');
       }
@@ -133,13 +136,12 @@ const Inventory = () => {
     { field: 'name', headerName: 'Name' },
     { field: 'quantity', headerName: 'Quantity' },
     { field: 'location', headerName: 'Location' },
-    { field: 'last_updated', headerName: 'Last Updated' }, // Added last_updated column
+    { field: 'last_updated', headerName: 'Last Updated' },
   ], []);
 
   const filteredAndSortedInventories = useMemo(() => {
     let result = inventories;
 
-    // Apply filters
     Object.entries(filters).forEach(([field, value]) => {
       if (value) {
         result = result.filter(item => 
@@ -148,7 +150,6 @@ const Inventory = () => {
       }
     });
 
-    // Apply sorting
     if (sortConfig.key) {
       result.sort((a, b) => {
         if (a[sortConfig.key] < b[sortConfig.key]) {
@@ -220,7 +221,7 @@ const Inventory = () => {
                     </TableCell>
                     <TableCell>{inventory.quantity}</TableCell>
                     <TableCell>{inventory.location}</TableCell>
-                    <TableCell>{inventory.last_updated}</TableCell> {/* Added last_updated column */}
+                    <TableCell>{inventory.last_updated}</TableCell>
                     <TableCell>
                       <Button
                         startIcon={<EditIcon />}

@@ -435,6 +435,8 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
                     type="number"
                     InputProps={{
                       startAdornment: <InputAdornment position="start">£</InputAdornment>,
+                      inputProps: { min: 0 } // Add min attribute to prevent negative input
+
                     }}
                   />
                 </Grid>

@@ -18,7 +18,7 @@ import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import BlockIcon from '@mui/icons-material/Block';
 
-const ToProcureTable = ({ data, setData, onSaveSelected }) => {
+const ToProcureTable = ({ data, setData, onSaveSelected, fetchToProcureItems }) => {
   const [selectedProducts, setSelectedProducts] = useState({});
   const [editedData, setEditedData] = useState({});
   const [filters, setFilters] = useState({});
@@ -99,7 +99,6 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters);
   };
-
 
   const handlePoDialogClose = () => {
     setPoDialogOpen(false);
@@ -234,7 +233,6 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
     handlePoDialogClose();
   };
 
-
   const handleCantProcure = async () => {
     const selectedItems = Object.keys(selectedProducts)
     .filter(id => selectedProducts[id])
@@ -249,15 +247,14 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
       console.log('selectedItems:', selectedItems);
       const response = await api.post('/api/to_procure/cant_procure', { items: selectedItems });
       showSnackbar(response.data.message || 'Items marked as cannot procure', 'success');
-      // Update the local state to remove the items marked as can't procure
-      setData(prevData => prevData.filter(item => !selectedItems.some(selectedItem => selectedItem.ID === item.ID)));
+      // Fetch the updated data to refresh the table
+      await fetchToProcureItems();
       setSelectedProducts({});
     } catch (error) {
       console.error('Error marking items as cannot procure:', error);
-      showSnackbar(error.response?.data?.message || 'Failed to mark items as cannot procure. Please try again.', 'error');
+      showSnackbar(error.response?.data?.error || 'Failed to mark items as cannot procure. Please try again.', 'error');
     }
   };
-
 
   const handleRowClick = (event, product) => {
     if (event.target.closest('input, select, .MuiCheckbox-root')) {
@@ -368,7 +365,6 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
     return <span style={cellStyle}>{value}</span>;
   };
 
-  
   return (
     <>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
@@ -453,8 +449,8 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
             : undefined
         }
       >
-    <MenuItem onClick={() => handleEdit(contextMenu.product)}>Edit Item</MenuItem>
-    <MenuItem onClick={handleCreatePO}>Create Purchase Order</MenuItem>
+        <MenuItem onClick={() => handleEdit(contextMenu.product)}>Edit Item</MenuItem>
+        <MenuItem onClick={handleCreatePO}>Create Purchase Order</MenuItem>
       </Menu>
 
       <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="md">
@@ -467,12 +463,14 @@ const ToProcureTable = ({ data, setData, onSaveSelected }) => {
                 type="number"
                 value={editingItem['Cost of Goods']}
                 onChange={(e) => handleInputChange('Cost of Goods', e.target.value)}
+                inputProps={{ min: 0 }} // Add min attribute to prevent negative input
               />
               <TextField
                 label="Quantity"
                 type="number"
                 value={editingItem.Quantity}
                 onChange={(e) => handleInputChange('Quantity', e.target.value)}
+                inputProps={{ min: 0 }} // Add min attribute to prevent negative input
               />
             </Box>
           )}

@@ -3,11 +3,6 @@ import {
   Typography,
   Box,
   ThemeProvider,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
 } from '@mui/material';
 import ResultTable from './ResultTable';
 import api from './api';
@@ -27,8 +22,6 @@ const ToApprove = () => {
   const [users, setUsers] = useState([]);
   const [assignees, setAssignees] = useState({});
   const { showSnackbar } = useSnackbar();
-  const [restrictedItems, setRestrictedItems] = useState([]);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const handleAssigneeChange = (ID, assigneeIds) => {
     setAssignees(prev => ({ ...prev, [ID]: assigneeIds }));
@@ -39,9 +32,8 @@ const ToApprove = () => {
       const response = await api.get('/api/saved_results/get_saved_results');
       const data = response.data;
 
-      // Create initial assignees based on User ID
       const initialAssignees = data.reduce((acc, item) => {
-        acc[item.ID] = [item["User ID"]]; // Use "User ID" directly
+        acc[item.ID] = [item["User ID"]];
         return acc;
       }, {});
       setAssignees(initialAssignees);
@@ -82,19 +74,16 @@ const ToApprove = () => {
       }));
       const response = await api.post('/api/saved_results/approve_saved_items', { items: itemsWithAssignees });
       
-      if (response.data.items_with_restrictions && response.data.items_with_restrictions.length > 0) {
-        setRestrictedItems(response.data.items_with_restrictions);
-        setIsDialogOpen(true);
-      }
-
       const approvedItemIds = response.data.approved_items || [];
       setSavedItems(prevItems => prevItems.filter(item => !approvedItemIds.includes(item.ID)));
       
-      const newAssignees = {...assignees};
-      approvedItemIds.forEach(id => {
-        delete newAssignees[id];
+      setAssignees(prevAssignees => {
+        const newAssignees = {...prevAssignees};
+        approvedItemIds.forEach(id => {
+          delete newAssignees[id];
+        });
+        return newAssignees;
       });
-      setAssignees(newAssignees);
   
       showSnackbar('Items processed successfully.', 'success');
       return { success: true, message: 'Items processed successfully.' };
@@ -103,11 +92,6 @@ const ToApprove = () => {
       showSnackbar('Error approving items. Please try again.', 'error');
       return { success: false, message: 'Error approving items. Please try again.' };
     }
-  };
-
-  const handleCloseDialog = () => {
-    setIsDialogOpen(false);
-    setRestrictedItems([]);
   };
 
   const handleRejectSelected = async (selectedItems) => {
@@ -141,30 +125,58 @@ const ToApprove = () => {
     }
   };
 
-  const handleDecisionUpdate = async (updatedItem) => {
-    try {
-      await api.post('/api/saved_results/update_decision', { ID: updatedItem.ID, decision: updatedItem.Decision });
-      setSavedItems(prevItems => 
-        prevItems.map(item => 
-          item.ID === updatedItem.ID ? { ...item, Decision: updatedItem.Decision } : item
-        )
-      );
-      console.log('Decision updated:', updatedItem);
-      showSnackbar('Decision updated successfully.', 'success');
-    } catch (error) {
-      console.error('Error updating decision:', error);
-      showSnackbar('Error updating decision. Please try again.', 'error');
-    }
-  };
-
   const handleRemoveSelected = async (selectedItems) => {
     try {
       await api.post('/api/saved_results/remove_saved_items', { items: selectedItems });
-      fetchSavedItems();  // Refresh the data
+      fetchSavedItems();
       showSnackbar('Items removed successfully.', 'success');
     } catch (error) {
       console.error('Error removing items:', error);
       showSnackbar('Error removing items. Please try again.', 'error');
+    }
+  };
+
+  const handleSplitUpdate = async (updatedItem) => {
+    try {
+      await api.post('/api/saved_results/update_split', {
+        ID: updatedItem.ID,
+        FBA_Split: updatedItem['FBA Split'],
+        FBM_Split: updatedItem['FBM Split'],
+      });
+      setSavedItems(prevItems => 
+        prevItems.map(item => 
+          item.ID === updatedItem.ID 
+            ? { ...item, 'FBA Split': updatedItem['FBA Split'], 'FBM Split': updatedItem['FBM Split'] } 
+            : item
+        )
+      );
+      console.log('Split updated:', updatedItem);
+      showSnackbar('Split updated successfully.', 'success');
+    } catch (error) {
+      console.error('Error updating split:', error);
+      showSnackbar('Error updating split. Please try again.', 'error');
+    }
+  };
+
+  const handleQuantityUpdate = async (updatedItem) => {
+    try {
+      await api.post('/api/saved_results/update_quantity', {
+        ID: updatedItem.ID,
+        Quantity: updatedItem.Quantity,
+        FBA_Split: updatedItem['FBA Split'],
+        FBM_Split: updatedItem['FBM Split'],
+      });
+      setSavedItems(prevItems => 
+        prevItems.map(item => 
+          item.ID === updatedItem.ID 
+            ? { ...item, Quantity: updatedItem.Quantity, 'FBA Split': updatedItem['FBA Split'], 'FBM Split': updatedItem['FBM Split'] } 
+            : item
+        )
+      );
+      showSnackbar('Quantity and split updated successfully.', 'success');
+    } catch (error) {
+      console.error('Error updating quantity and split:', error);
+      showSnackbar('Error updating quantity and split. Please try again.', 'error');
     }
   };
 
@@ -177,7 +189,6 @@ const ToApprove = () => {
       </Box>
     );
   }
-
 
   return (
     <ThemeProvider theme={theme}>
@@ -194,41 +205,26 @@ const ToApprove = () => {
         <ContentContainer>
           <ResultsContainer>
             {savedItems.length > 0 ? (
-              <ResultTable 
-                data={savedItems} 
-                setData={setSavedItems}
-                onSaveSelected={handleApproveSelected}
-                onRemoveSelected={handleRemoveSelected}
-                onDecisionUpdate={handleDecisionUpdate} 
-                onCommentUpdate={handleCommentUpdate}
-                isSavedResults={true}
-                users={users}
-                assignees={assignees}
-                onAssigneeChange={handleAssigneeChange}
-                multipleAssignees={true}
-                onRejectSelected={handleRejectSelected}
-              />
+                  <ResultTable 
+                  data={savedItems} 
+                  setData={setSavedItems}
+                  onSaveSelected={handleApproveSelected}
+                  onRemoveSelected={handleRemoveSelected}
+                  onSplitUpdate={handleSplitUpdate} 
+                  onCommentUpdate={handleCommentUpdate}
+                  onQuantityUpdate={handleQuantityUpdate}
+                  isSavedResults={true}
+                  users={users}
+                  assignees={assignees}
+                  onAssigneeChange={handleAssigneeChange}
+                  multipleAssignees={true}
+                  onRejectSelected={handleRejectSelected}
+                />
             ) : (
               <Typography variant="body1">No pending items found.</Typography>
             )}
           </ResultsContainer>
         </ContentContainer>
-        <Dialog open={isDialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-          <DialogTitle>Below items have been rejected due to listing restrictions</DialogTitle>
-          <DialogContent>
-            {restrictedItems.map((item, index) => (
-              <Box key={index} mb={2}>
-                <Typography variant="subtitle1">ASIN: {item.asin}</Typography>
-                <Typography variant="body1">{item.restrictions}</Typography>
-              </Box>
-            ))}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDialog} color="primary">
-              Close
-            </Button>
-          </DialogActions>
-        </Dialog>
       </PageContainer>
     </ThemeProvider>
   );

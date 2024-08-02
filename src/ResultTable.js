@@ -25,7 +25,8 @@ const ResultTable = ({
   onSaveSelected, 
   isSavedResults = false, 
   onRemoveSelected, 
-  onDecisionUpdate, 
+  onSplitUpdate,  
+  onQuantityUpdate,
   onCommentUpdate, 
   users, 
   assignees, 
@@ -46,14 +47,18 @@ const ResultTable = ({
   const [selectedRowIndex, setSelectedRowIndex] = useState(null);
   const [filters, setFilters] = useState({});
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
+  const [selectedItem, setSelectedItem] = useState(null);
+
+
+
 
   const handleContextMenu = (event, index) => {
     event.preventDefault();
-    const product = data[index];
-    if (product['Approval Status'] !== 'pending' && product['Approval Status'] !== 'approved') {
-      setContextMenu({ mouseX: event.clientX - 2, mouseY: event.clientY - 4 });
-      setSelectedRowIndex(index);
-    }
+    const item = data[index];
+    setContextMenu({ mouseX: event.clientX - 2, mouseY: event.clientY - 4 });
+    setSelectedRowIndex(index);
+    setSelectedItem(item);
+    console.log('Selected item for context menu:', item);
   };
 
   const handleCloseContextMenu = () => {
@@ -67,24 +72,27 @@ const ResultTable = ({
     onAssigneeChange(ID, multipleAssignees ? value : value[value.length - 1]);
   };
 
-  const handleDecisionChange = async (newDecision) => {
+  const handleSplitChange = async (newSplit) => {
     if (selectedRowIndex !== null) {
-      try {
-        const updatedItem = { ...data[selectedRowIndex], Decision: newDecision };
-        await onDecisionUpdate(updatedItem);
-        setData((prevData) => {
-          const newData = [...prevData];
-          newData[selectedRowIndex] = updatedItem;
-          return newData;
-        });
-        showSnackbar('Decision updated successfully', 'success');
-      } catch (error) {
-        console.error('Error updating decision:', error);
-        showSnackbar('Failed to update decision', 'error');
-      }
-      handleCloseContextMenu();
+      const updatedItem = { 
+        ...data[selectedRowIndex], 
+        'FBA Split': newSplit['FBA Split'], 
+        'FBM Split': newSplit['FBM Split'] 
+      };
+      console.log('Updating split in ResultTable:', updatedItem);
+      await onSplitUpdate(updatedItem);
     }
   };
+
+  const handleQuantityChange = async (updatedItem) => {
+    if (onQuantityUpdate) {
+      await onQuantityUpdate(updatedItem);
+    }
+    setData(prevData => prevData.map(item =>
+      item.ID === updatedItem.ID ? updatedItem : item
+    ));
+  };
+
 
   const handleRowClick = (product) => setSelectedProduct(product);
   const handleCloseModal = () => setSelectedProduct(null);
@@ -107,20 +115,24 @@ const ResultTable = ({
   const handleSaveSelected = async () => {
     const selectedItems = data.filter((item) => selectedProducts[item.ID]);
     if (selectedItems.length === 0) {
-      showSnackbar("No items selected.", 'warning');
-      return;
+      showSnackbar("No items selected.", "warning");
+      return { success: false, message: "No items selected." };
     }
+
+    const itemsWithoutTitle = selectedItems.filter(item => !item['Search Product Name']);
+    if (itemsWithoutTitle.length > 0) {
+      const itemIds = itemsWithoutTitle.map(item => item.ID).join(', ');
+      showSnackbar(`Items with IDs ${itemIds} cannot be sent for approval without a search product title.`, "error");
+      return { success: false, message: "Some items are missing search product title." };
+    }
+
     try {
       const response = await onSaveSelected(selectedItems);
-      if (response && response.success) {
-        showSnackbar(response.message || "Selected items saved successfully.", 'success');
-        setSelectedProducts({});
-      } else {
-        showSnackbar(response?.message || "Error saving selected items. Please try again.", 'error');
-      }
+      setSelectedProducts({});
+      return response;
     } catch (error) {
       console.error('Error saving selected items:', error);
-      showSnackbar(error.message || "Error saving selected items. Please try again.", 'error');
+      return { success: false, message: "Error saving selected items. Please try again." };
     }
   };
 
@@ -164,7 +176,8 @@ const ResultTable = ({
 
   const columns = useMemo(() => {
     let baseColumns = [
-      { field: "Search Query", headerName: "Search Query" },
+      { field: "Search Product Name", headerName: "Search Product Name" },
+      { field: "Search ASIN", headerName: "Search ASIN" },
       { field: "ASIN", headerName: "ASIN" },
       { field: "Amazon Product Name", headerName: "Product Name" },
       { field: "Matching Percentage", headerName: "Match %" },
@@ -173,6 +186,7 @@ const ResultTable = ({
       { field: "VAT Rate", headerName: "VAT %" },
       { field: "Sales Volume", headerName: "Sales Volume" },
       { field: "Expected Sales Volume", headerName: "Exp. Sales Volume" },
+      { field: "Quantity", headerName: "Quantity" },
       { field: "Buy Box Price", headerName: "Buy Box Price" },
       { field: "Cheapest FBA Price", headerName: "Cheapest FBA" },
       { field: "Cheapest FBM Price", headerName: "Cheapest FBM" },
@@ -184,7 +198,8 @@ const ResultTable = ({
       { field: "Expected Total Net Profit FBA", headerName: "Exp. Profit FBA" },
       { field: "Expected Total Net Profit FBM", headerName: "Exp. Profit FBM" },
       { field: "Is Sold by Amazon", headerName: "Sold by Amazon" },
-      { field: "Decision", headerName: "Decision" },
+      { field: "FBA Split", headerName: "FBA Split" },
+      { field: "FBM Split", headerName: "FBM Split" },
       { field: "Comment", headerName: "Comment" }
     ];
 
@@ -257,7 +272,7 @@ const ResultTable = ({
 
     const value = item[column.field];
 
-    if (column.field === "Amazon Product Name" || column.field === "Search Query") {
+    if (column.field === "Amazon Product Name" || column.field === "Search Product Name") {
       return (
         <Tooltip title={value || ''}>
           <span>{truncateText(value, 20)}</span>
@@ -290,12 +305,6 @@ const ResultTable = ({
       );
     } else if (column.field === "Is Sold by Amazon") {
       return <span>{value}</span>;
-    } else if (column.field === "Decision") {
-      return (
-        <span style={{ color: value && value.startsWith('No') ? 'red' : 'green' }}>
-          {value}
-        </span>
-      );
     } else {
       return formatValue(value);
     }
@@ -500,8 +509,11 @@ const ResultTable = ({
         }
         isOpen={contextMenu.mouseY !== null}
         onClose={handleCloseContextMenu}
-        onDecisionChange={handleDecisionChange}
+        onSplitChange={handleSplitChange}
+        onQuantityChange={handleQuantityChange}
+        currentItem={selectedItem}
       />
+
     </>
   );
 };

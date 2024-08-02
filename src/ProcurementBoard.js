@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   TextField, Button, Typography, Paper, CircularProgress, Grid, Box, MenuItem, Select,
-  FormControl, InputLabel, InputAdornment, LinearProgress, RadioGroup, FormControlLabel, Radio,
-  Tabs, Tab, Autocomplete, Drawer, Divider
+  FormControl, InputLabel, InputAdornment, LinearProgress,
+  Tabs, Tab, Autocomplete, Drawer, Divider, Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
@@ -16,7 +16,6 @@ import { useNavigate } from 'react-router-dom';
 import { styled } from '@mui/system';
 import ResultTable from './ResultTable';
 import api from './api';
-import axios from 'axios';
 import { useSnackbar } from './SnackbarContext';
 import {
   PageContainer,
@@ -37,17 +36,17 @@ const LogDrawer = styled(Drawer)(({ theme }) => ({
 
 const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
   const [processType, setProcessType] = useState('text');
-  const [inputType, setInputType] = useState('title');
+  const [productTitle, setProductTitle] = useState('');
+  const [asin, setAsin] = useState('');
   const [url, setUrl] = useState('');
-  const [inputValue, setInputValue] = useState('');
   const [costOfGoods, setCostOfGoods] = useState('');
   const [vat, setVat] = useState('');
   const [image, setImage] = useState(null);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState([]);
-  const [tabValue, setTabValue] = useState(1); // Default to 'text' tab
-  const cancelTokenSource = useRef(axios.CancelToken.source());
+  const [tabValue, setTabValue] = useState(1);
+  const cancelTokenSource = useRef(null);
   const navigate = useNavigate();
   const [counterParty, setCounterParty] = useState('');
   const [counterParties, setCounterParties] = useState([]);
@@ -62,6 +61,8 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
   const [approvedResults, setApprovedResults] = useState([]);
   const [cantProcureResults, setCantProcureResults] = useState([]);
   const [cantListedResults, setCantListedResults] = useState([]);
+  const [restrictedItems, setRestrictedItems] = useState([]);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const handleResultTabChange = (event, newValue) => {
     setResultTabValue(newValue);
@@ -69,7 +70,6 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
 
   const resetInputValues = useCallback(() => {
     setUrl('');
-    setInputValue('');
     setCostOfGoods('');
     setVat('');
     setImage(null);
@@ -173,17 +173,31 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
   const handleSaveSelected = async (selectedItems) => {
     try {
       const response = await api.post('/api/procurement_board/save_flagged', { items: selectedItems });
-      if (response.data && response.data.message) {
-        setResults(prevResults => prevResults.map(item => {
-          if (selectedItems.some(selectedItem => selectedItem.ID === item.ID)) {
-            return { ...item };
-          }
-          return item;
-        }));
-        showSnackbar(response.data.message, 'success');
-        return { success: true, message: response.data.message };
+      if (response.data) {
+        const { message, warnings, items_with_restrictions } = response.data;
+        
+        if (items_with_restrictions && items_with_restrictions.length > 0) {
+          setRestrictedItems(items_with_restrictions);
+          setIsDialogOpen(true);
+          const restrictedCount = items_with_restrictions.length;
+          const totalCount = selectedItems.length;
+          showSnackbar(
+            `Warning: ${restrictedCount} out of ${totalCount} item(s) have listing restrictions. Check details for more information.`,
+            'warning'
+          );
+        } else {
+          showSnackbar(message, 'success');
+        }
+  
+        if (warnings && warnings.length > 0) {
+          console.log("Warnings:", warnings);
+        }
+  
+        setResults(prevResults => prevResults.filter(item => !selectedItems.some(selectedItem => selectedItem.ID === item.ID)));
+        return { success: true, message: message };
       }
     } catch (error) {
+      console.error('Error saving selected items:', error);
       showSnackbar(error.response?.data?.error || 'Error sending items for approval. Please try again.', 'error');
       return { success: false, message: error.response?.data?.error || 'Error sending items for approval' };
     }
@@ -198,26 +212,6 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
     } catch (error) {
       console.error('Error removing items:', error);
       showSnackbar('Error removing items. Please try again.', 'error');
-    }
-  };
-
-  const handleDashboardDecisionUpdate = async (updatedItem) => {
-    try {
-      const response = await api.post('/api/procurement_board/update_decision', {
-        ID: updatedItem.ID,
-        Decision: updatedItem.Decision,
-      });
-      if (response.status === 200) {
-        setResults(prevResults => prevResults.map(item =>
-          item.ID === updatedItem.ID ? { ...item, Decision: updatedItem.Decision } : item
-        ));
-        showSnackbar('Decision updated successfully', 'success');
-      } else {
-        showSnackbar('Failed to update decision', 'error');
-      }
-    } catch (error) {
-      console.error('Error updating decision:', error);
-      showSnackbar('Failed to update decision', 'error');
     }
   };
 
@@ -268,19 +262,26 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
   }, [addLog, showSnackbar, resetInputValues]);
 
   // Form Submission and Processing
+
   const handleSubmit = useCallback(async () => {
     try {
       if (localLoading) return;
-      if (!counterParty && tabValue === 1) {
-        showSnackbar('Please select a Counter Party', 'error');
-        return;
+      
+      if (tabValue === 1) {
+        if (!counterParty) {
+          showSnackbar('Please select a Counter Party', 'error');
+          return;
+        }
+        if (!productTitle && !asin) {
+          showSnackbar('Please enter either Product Title or ASIN', 'error');
+          return;
+        }
       }
-
       setLocalLoading(true);
       setLoading(true);
       setLogs([]);
       setResults([]);
-      cancelTokenSource.current = axios.CancelToken.source();
+      cancelTokenSource.current = api.CancelToken.source();
 
       let response;
       if (processType === 'url') {
@@ -293,8 +294,8 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
         response = await api.post(
           '/api/procurement_board/process_text',
           {
-            input_type: inputType,
-            input_value: inputValue,
+            product_title: productTitle,
+            asin: asin,
             cost_of_goods: costOfGoods,
             vat,
             counter_party: counterParty
@@ -323,10 +324,10 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
         showSnackbar('Processing completed successfully', 'success');
         setLocalLoading(false);
         setLoading(false);
-        resetInputValues(); // Reset input values after processing is complete
+        resetInputValues();
       }
     } catch (error) {
-      if (axios.isCancel(error)) {
+      if (api.isCancel(error)) {
         showSnackbar('Request was cancelled', 'info');
       } else {
         showSnackbar(`Error processing ${processType}: ${error.message}`, 'error');
@@ -335,8 +336,7 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
       setLocalLoading(false);
       setLoading(false);
     }
-  }, [localLoading, counterParty, tabValue, processType, url, inputType,
-    inputValue, costOfGoods, vat, image, showSnackbar, pollProcessingStatus, resetInputValues]);
+  }, [localLoading, counterParty, tabValue, processType, url, productTitle, asin, costOfGoods, vat, image, showSnackbar, pollProcessingStatus, resetInputValues]);
 
   const handleCancel = () => {
     if (cancelTokenSource.current) {
@@ -347,12 +347,55 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
     showSnackbar('Processing cancelled', 'info');
   };
 
-  // UI Handling Functions
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setRestrictedItems([]);
+  };
+
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
     setProcessType(['url', 'text', 'image'][newValue]);
   };
 
+  const handleSplitUpdate = async (updatedItem) => {
+    try {
+      await api.post('/api/procurement_board/update_split', {
+        ID: updatedItem.ID,
+        FBA_Split: updatedItem['FBA Split'],
+        FBM_Split: updatedItem['FBM Split'],
+      });
+      setResults(prevResults => prevResults.map(item =>
+        item.ID === updatedItem.ID 
+          ? { ...item, 'FBA Split': updatedItem['FBA Split'], 'FBM Split': updatedItem['FBM Split'] } 
+          : item
+      ));
+      showSnackbar('Split updated successfully', 'success');
+    } catch (error) {
+      console.error('Error updating split:', error);
+      showSnackbar('Failed to update split', 'error');
+    }
+  };
+  
+  const handleQuantityUpdate = async (updatedItem) => {
+    try {
+      await api.post('/api/procurement_board/update_quantity', {
+        ID: updatedItem.ID,
+        Quantity: updatedItem.Quantity,
+        FBA_Split: updatedItem['FBA Split'],
+        FBM_Split: updatedItem['FBM Split'],
+      });
+      setResults(prevResults => prevResults.map(item =>
+        item.ID === updatedItem.ID 
+          ? { ...item, Quantity: updatedItem.Quantity, 'FBA Split': updatedItem['FBA Split'], 'FBM Split': updatedItem['FBM Split'] } 
+          : item
+      ));
+      showSnackbar('Quantity and split updated successfully', 'success');
+    } catch (error) {
+      console.error('Error updating quantity and split:', error);
+      showSnackbar('Failed to update quantity and split', 'error');
+    }
+  };
+  
   return (
     <PageContainer>
       <StyledHeader>
@@ -403,24 +446,24 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
             <Box mt={3}>
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={12} sm={3}>
-                  <FormControl component="fieldset">
-                    <RadioGroup
-                      row
-                      value={inputType}
-                      onChange={(e) => setInputType(e.target.value)}
-                    >
-                      <FormControlLabel value="title" control={<Radio />} label="Product Title" />
-                      <FormControlLabel value="asin" control={<Radio />} label="ASIN" />
-                    </RadioGroup>
-                  </FormControl>
+                  <TextField
+                    label="Product Title"
+                    fullWidth
+                    value={productTitle}
+                    onChange={(e) => {
+                      setProductTitle(e.target.value);
+                    }}
+                    variant="outlined"
+                  />
                 </Grid>
                 <Grid item xs={12} sm={3}>
                   <TextField
-                    label={inputType === 'title' ? "Product Title" : "ASIN"}
+                    label="ASIN"
                     fullWidth
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    required
+                    value={asin}
+                    onChange={(e) => {
+                      setAsin(e.target.value);
+                    }}
                     variant="outlined"
                   />
                 </Grid>
@@ -435,8 +478,7 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
                     type="number"
                     InputProps={{
                       startAdornment: <InputAdornment position="start">£</InputAdornment>,
-                      inputProps: { min: 0 } // Add min attribute to prevent negative input
-
+                      inputProps: { min: 0 }
                     }}
                   />
                 </Grid>
@@ -569,15 +611,16 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
               </Tabs>
               {resultTabValue === 0 && (
                 <ResultTable
-                  data={results}
-                  setData={setResults}
-                  onSaveSelected={handleSaveSelected}
-                  onRemoveSelected={handleRemoveSelected}
-                  onDecisionUpdate={handleDashboardDecisionUpdate}
-                  onCommentUpdate={handleCommentUpdate}
-                  isSavedResults={false}
-                  showRemoveButton={true}
-                />
+                data={results}
+                setData={setResults}
+                onSaveSelected={handleSaveSelected}
+                onRemoveSelected={handleRemoveSelected}
+                onCommentUpdate={handleCommentUpdate}
+                onSplitUpdate={handleSplitUpdate}
+                onQuantityUpdate={handleQuantityUpdate}
+                isSavedResults={false}
+                showRemoveButton={true}
+              />
               )}
               {resultTabValue === 1 && (
                 <ResultTable
@@ -585,21 +628,22 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
                   setData={setPendingResults}
                   onSaveSelected={handleSaveSelected}
                   onRemoveSelected={handleRemoveSelected}
-                  onDecisionUpdate={handleDashboardDecisionUpdate}
                   onCommentUpdate={handleCommentUpdate}
                   isSavedResults={false}
                   showSendForApprovalButton={false}
                 />
               )}
               {resultTabValue === 2 && (
-                <ResultTable
-                  data={rejectedResults}
-                  setData={setRejectedResults}
+                  <ResultTable
+                  data={results}
+                  setData={setResults}
                   onSaveSelected={handleSaveSelected}
                   onRemoveSelected={handleRemoveSelected}
-                  onDecisionUpdate={handleDashboardDecisionUpdate}
                   onCommentUpdate={handleCommentUpdate}
+                  onSplitUpdate={handleSplitUpdate}
+                  onQuantityUpdate={handleQuantityUpdate}
                   isSavedResults={false}
+                  showRemoveButton={true}
                 />
               )}
               {resultTabValue === 3 && (
@@ -608,7 +652,6 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
                   setData={setApprovedResults}
                   onSaveSelected={handleSaveSelected}
                   onRemoveSelected={handleRemoveSelected}
-                  onDecisionUpdate={handleDashboardDecisionUpdate}
                   onCommentUpdate={handleCommentUpdate}
                   isSavedResults={false}
                   showSendForApprovalButton={false}
@@ -620,7 +663,6 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
                   setData={setCantProcureResults}
                   onSaveSelected={handleSaveSelected}
                   onRemoveSelected={handleRemoveSelected}
-                  onDecisionUpdate={handleDashboardDecisionUpdate}
                   onCommentUpdate={handleCommentUpdate}
                   isSavedResults={false}
                   showSendForApprovalButton={false}
@@ -632,7 +674,6 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
                   setData={setCantListedResults}
                   onSaveSelected={handleSaveSelected}
                   onRemoveSelected={handleRemoveSelected}
-                  onDecisionUpdate={handleDashboardDecisionUpdate}
                   onCommentUpdate={handleCommentUpdate}
                   isSavedResults={false}
                   showSendForApprovalButton={false}
@@ -642,6 +683,30 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
           )}
         </ResultsContainer>
       </ContentContainer>
+
+      <Dialog open={isDialogOpen} onClose={handleCloseDialog}>
+        <DialogTitle>Restricted Items</DialogTitle>
+        <DialogContent>
+          {restrictedItems.map((item, index) => (
+            <Box key={index} mb={2}>
+              <Typography variant="body1">
+                Item ID: {item.id}
+              </Typography>
+              <Typography variant="body1">
+                ASIN: {item.asin}
+              </Typography>
+              <Typography variant="body1">
+                Restrictions: {item.restrictions}
+              </Typography>
+            </Box>
+          ))}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDialog} color="primary">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <LogDrawer
         anchor="right"

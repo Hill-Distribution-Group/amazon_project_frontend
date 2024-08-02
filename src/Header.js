@@ -74,8 +74,7 @@ const Header = ({ isLoggedIn, onLogout }) => {
     ],
     sales: [
       { label: 'Order Management', path: '/order-management' },
-      { label: 'Amazon FBA', path: '/amazon-fba' },
-      { label: 'Amazon FBM', path: '/amazon-fbm' },
+      { label: 'Amazon', path: '/amazon-sales' },
       { label: 'eBay', path: '/ebay' },
       { label: 'TikTok Shop', path: '/tiktok-shop' },
       { label: 'Multi-Channel Listings', path: '/multi-channel-listings' },

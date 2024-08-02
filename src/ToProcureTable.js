@@ -1,12 +1,10 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Box, Checkbox, TextField, FormControl, InputLabel, Select,
   MenuItem, Dialog, DialogTitle, DialogContent,
-  DialogActions, List, ListItem, ListItemText, IconButton, Menu, Tooltip, Button, Modal, Typography
+  DialogActions, Menu, Tooltip, Button, Modal, Typography
 } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import AddIcon from '@mui/icons-material/Add';
 import api from './api';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -26,7 +24,6 @@ const ToProcureTable = ({ data, setData, onSaveSelected, fetchToProcureItems }) 
   const [poDialogOpen, setPoDialogOpen] = useState(false);
   const [poDetails, setPoDetails] = useState([]);
   const [contextMenu, setContextMenu] = useState(null);
-  const [isPoValid, setIsPoValid] = useState(false);
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [extraPackingNeeded, setExtraPackingNeeded] = useState('');
@@ -83,7 +80,7 @@ const ToProcureTable = ({ data, setData, onSaveSelected, fetchToProcureItems }) 
       const response = await api.put(`/api/to_procure/update_to_procure_item`, editingItem);
       if (response.data.status === "moved_to_saved_results") {
         setData(prevData => prevData.filter(item => item.ID !== editingItem.ID));
-        showSnackbar("Item moved back to SavedResults due to margin decrease.", 'warning');
+        showSnackbar("Item moved back to approval due to margin decrease or quantity change", 'warning');
       } else if (response.data.status === "updated") {
         setData(prevData => prevData.map(item => item.ID === editingItem.ID ? response.data.item : item));
         showSnackbar("Item updated successfully.", 'success');
@@ -95,6 +92,7 @@ const ToProcureTable = ({ data, setData, onSaveSelected, fetchToProcureItems }) 
       showSnackbar("Error updating item. Please try again.", 'error');
     }
   };
+  
 
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters);
@@ -125,13 +123,17 @@ const ToProcureTable = ({ data, setData, onSaveSelected, fetchToProcureItems }) 
   const handleCreatePO = () => {
     if (contextMenu) {
       const selectedItem = editedData[contextMenu.product.ID];
+      const fbaSplit = parseInt(selectedItem['FBA Split']) || 0;
+      const fbmSplit = parseInt(selectedItem['FBM Split']) || 0;
+      const totalQuantity = fbaSplit + fbmSplit;
+  
       const newPoDetails = [{
         ...selectedItem,
-        totalQuantity: parseInt(selectedItem.Quantity) || 0,
+        totalQuantity: totalQuantity,
         splits: [
-          { id: 1, channel: 'Amazon FBA', quantity: Math.floor((parseInt(selectedItem.Quantity) || 0) / 2) },
-          { id: 2, channel: 'Amazon FBM', quantity: Math.ceil((parseInt(selectedItem.Quantity) || 0) / 2) }
-        ]
+          { id: 1, channel: 'Amazon FBA', quantity: fbaSplit },
+          { id: 2, channel: 'Amazon FBM', quantity: fbmSplit }
+        ].filter(split => split.quantity > 0)
       }];
       setPoDetails(newPoDetails);
       setPoDialogOpen(true);
@@ -139,83 +141,27 @@ const ToProcureTable = ({ data, setData, onSaveSelected, fetchToProcureItems }) 
     }
   };
 
-  const handleAddSplit = (index) => {
-    setPoDetails(prevDetails => {
-      const newDetails = [...prevDetails];
-      const item = newDetails[index];
-      const totalAssigned = item.splits.reduce((sum, split) => sum + parseInt(split.quantity || 0), 0);
-      const remainingQuantity = item.totalQuantity - totalAssigned;
-
-      if (remainingQuantity > 0) {
-        const newSplitId = Math.max(...item.splits.map(split => split.id), 0) + 1;
-        item.splits.push({ id: newSplitId, channel: 'Not Specified', quantity: remainingQuantity });
-      }
-
-      return newDetails;
-    });
-  };
-
-  const handleRemoveSplit = (itemIndex, splitId) => {
-    setPoDetails(prevDetails => {
-      const newDetails = [...prevDetails];
-      const item = newDetails[itemIndex];
-      item.splits = item.splits.filter(split => split.id !== splitId);
-      return newDetails;
-    });
-  };
-
-  const validatePoDetails = useCallback(() => {
-    if (poDetails.length === 0 || !expectedDeliveryDate) {
-      return false;
+  const handlePoSubmit = async () => {
+    if (!expectedDeliveryDate) {
+      showSnackbar("Please set an expected delivery date", "error");
+      return;
     }
-    
-    return poDetails.every(item => {
+  
+    if (poDetails.length === 0) {
+      showSnackbar("No items to create a purchase order", "error");
+      return;
+    }
+  
+    const isValid = poDetails.every(item => {
       const splitTotal = item.splits.reduce((sum, split) => sum + parseInt(split.quantity || 0), 0);
       return splitTotal === item.totalQuantity && item.totalQuantity > 0;
     });
-  }, [poDetails, expectedDeliveryDate]);
-
-  useEffect(() => {
-    const isValid = validatePoDetails();
-    setIsPoValid(isValid);
-  }, [validatePoDetails, poDetails, expectedDeliveryDate]);
-
-  const handleSplitChange = (itemIndex, splitId, field, value) => {
-    setPoDetails(prevDetails => {
-      const newDetails = [...prevDetails];
-      const item = newDetails[itemIndex];
-      const splitIndex = item.splits.findIndex(split => split.id === splitId);
-
-      if (splitIndex === -1) return prevDetails;
-
-      const updatedSplit = {
-        ...item.splits[splitIndex],
-        [field]: field === 'quantity' ? parseInt(value) || 0 : value
-      };
-
-      const updatedSplits = [...item.splits];
-      updatedSplits[splitIndex] = updatedSplit;
-
-      newDetails[itemIndex] = {
-        ...item,
-        splits: updatedSplits
-      };
-
-      return newDetails;
-    });
-  };
-
-  const getAvailableSalesChannels = (item) => {
-    const usedChannels = new Set(item.splits.map(split => split.channel));
-    return ['Amazon FBA', 'Amazon FBM', 'eBay', 'TikTok', 'Not Specified'].filter(channel => !usedChannels.has(channel));
-  };
-
-  const handlePoSubmit = async () => {
-    if (!validatePoDetails()) {
-      onSaveSelected(null, "Split quantities do not match total quantity or expected delivery date is not set");
+  
+    if (!isValid) {
+      showSnackbar("Split quantities do not match total quantity", "error");
       return;
     }
-
+  
     const purchaseOrders = poDetails.map(item => ({
       product_id: item['Product ID'],
       quantity: item.totalQuantity,
@@ -228,7 +174,7 @@ const ToProcureTable = ({ data, setData, onSaveSelected, fetchToProcureItems }) 
         return acc;
       }, {})
     }));
-
+  
     onSaveSelected(purchaseOrders);
     handlePoDialogClose();
   };
@@ -281,9 +227,10 @@ const ToProcureTable = ({ data, setData, onSaveSelected, fetchToProcureItems }) 
     { field: 'Margin FBM', headerName: 'Margin FBM' },
     { field: 'Net Profit FBA', headerName: 'Net Profit FBA' },
     { field: 'Net Profit FBM', headerName: 'Net Profit FBM' },
+    { field: 'FBA Split', headerName: 'FBA Split' },
+    { field: 'FBM Split', headerName: 'FBM Split' },
     { field: 'Approved By', headerName: 'Approved By' },
     { field: 'Approved At', headerName: 'Approved At' },
-    { field: 'Decision', headerName: 'Decision' }
   ], []);
 
   const handleSort = (key) => {
@@ -322,13 +269,15 @@ const ToProcureTable = ({ data, setData, onSaveSelected, fetchToProcureItems }) 
     return result;
   }, [data, filters, sortConfig]);
 
-  const getHighlightedColumns = (decision) => {
-    if (decision.includes('FBA')) {
-      return ['Sell Price FBA', 'Margin FBA', 'Net Profit FBA'];
-    } else if (decision.includes('FBM')) {
-      return ['Sell Price FBM', 'Margin FBM', 'Net Profit FBM'];
+  const getHighlightedColumns = (item) => {
+    const columns = [];
+    if (item['FBA Split'] > 0) {
+      columns.push('Sell Price FBA', 'Margin FBA', 'Net Profit FBA');
     }
-    return [];
+    if (item['FBM Split'] > 0) {
+      columns.push('Sell Price FBM', 'Margin FBM', 'Net Profit FBM');
+    }
+    return columns;
   };
 
   const extraPackagingOptions = [
@@ -340,9 +289,9 @@ const ToProcureTable = ({ data, setData, onSaveSelected, fetchToProcureItems }) 
 
   const renderEditableCell = (item, column) => {
     const value = editedData[item.ID]?.[column.field] || item[column.field];
-    const highlightedColumns = getHighlightedColumns(item.Decision || '');
+    const highlightedColumns = getHighlightedColumns(item);
     const isHighlighted = highlightedColumns.includes(column.field);
-
+  
     const cellStyle = {
       backgroundColor: isHighlighted ? '#e3f2fd' : 'inherit',
       fontWeight: isHighlighted ? 'bold' : 'normal',
@@ -482,81 +431,61 @@ const ToProcureTable = ({ data, setData, onSaveSelected, fetchToProcureItems }) 
       </Dialog>
 
       <Dialog open={poDialogOpen} onClose={handlePoDialogClose} maxWidth="md" fullWidth>
-        <DialogTitle>Create Purchase Order</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: '5px', maxWidth: '400px' }}>
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <DatePicker
-                label="Expected Delivery Date"
-                value={expectedDeliveryDate}
-                onChange={(newValue) => setExpectedDeliveryDate(newValue)}
-                renderInput={(params) => <TextField {...params} />}
-              />
-            </LocalizationProvider>
-            <FormControl>
-              <InputLabel>Extra Packing Needed</InputLabel>
-              <Select
-                value={extraPackingNeeded}
-                onChange={(e) => setExtraPackingNeeded(e.target.value)}
-              >
-                {extraPackagingOptions.map(option => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
-          <List>
-            {poDetails.map((item, itemIndex) => (
-              <ListItem key={item.ID} divider>
-                <ListItemText
-                  primary={item['Amazon Product Name']}
-                  secondary={`Total Quantity: ${item.totalQuantity}`}
-                />
-                <Box>
-                  {item.splits.map((split) => (
-                    <Box key={split.id} display="flex" alignItems="center" my={1}>
-                      <FormControl sx={{ minWidth: 120, mr: 1 }}>
-                        <Select
-                          value={split.channel}
-                          onChange={(e) => handleSplitChange(itemIndex, split.id, 'channel', e.target.value)}
-                        >
-                          {getAvailableSalesChannels(item).concat([split.channel]).map(channel => (
-                            <MenuItem key={channel} value={channel}>{channel}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <TextField
-                        type="number"
-                        value={split.quantity}
-                        onChange={(e) => handleSplitChange(itemIndex, split.id, 'quantity', e.target.value)}
-                        sx={{ width: 100, mr: 1 }}
-                      />
-                      <IconButton onClick={() => handleRemoveSplit(itemIndex, split.id)} disabled={item.splits.length === 1}>
-                        <DeleteIcon />
-                      </IconButton>
-                    </Box>
-                  ))}
-                  <Button
-                    startIcon={<AddIcon />}
-                    onClick={() => handleAddSplit(itemIndex)}
-                    disabled={item.splits.length >= 5 || item.splits.reduce((sum, split) => sum + parseInt(split.quantity || 0), 0) >= item.totalQuantity}
-                  >
-                    Add Split
-                  </Button>
-                </Box>
-              </ListItem>
+  <DialogTitle>Create Purchase Order</DialogTitle>
+  <DialogContent>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: '5px', maxWidth: '400px' }}>
+      <LocalizationProvider dateAdapter={AdapterDateFns}>
+        <DatePicker
+          label="Expected Delivery Date"
+          value={expectedDeliveryDate}
+          onChange={(newValue) => setExpectedDeliveryDate(newValue)}
+          renderInput={(params) => <TextField {...params} />}
+        />
+      </LocalizationProvider>
+      <FormControl>
+        <InputLabel>Extra Packing Needed</InputLabel>
+        <Select
+          value={extraPackingNeeded}
+          onChange={(e) => setExtraPackingNeeded(e.target.value)}
+        >
+          {extraPackagingOptions.map(option => (
+            <MenuItem key={option.value} value={option.value}>
+              {option.label}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+    </Box>
+    {poDetails.map((item, itemIndex) => (
+      <Box key={item.ID} sx={{ mt: 3 }}>
+        <Typography variant="subtitle1">{item['Amazon Product Name']}</Typography>
+        <Typography variant="body2">Total Quantity: {item.totalQuantity}</Typography>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Channel</TableCell>
+              <TableCell align="right">Quantity</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {item.splits.map((split) => (
+              <TableRow key={split.id}>
+                <TableCell>{split.channel}</TableCell>
+                <TableCell align="right">{split.quantity}</TableCell>
+              </TableRow>
             ))}
-          </List>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handlePoDialogClose}>Cancel</Button>
-          <Button onClick={handlePoSubmit} color="primary" disabled={!isPoValid}>
-            Create PO
-          </Button>
-        </DialogActions>
-      </Dialog>
+          </TableBody>
+        </Table>
+      </Box>
+    ))}
+  </DialogContent>
+  <DialogActions>
+    <Button onClick={handlePoDialogClose}>Cancel</Button>
+    <Button onClick={handlePoSubmit} color="primary">
+      Create PO
+    </Button>
+  </DialogActions>
+</Dialog>
 
       <Modal
         open={!!selectedProduct}

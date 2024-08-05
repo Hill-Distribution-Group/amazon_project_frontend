@@ -2,12 +2,15 @@ import React, { useState } from 'react';
 import { Menu, MenuItem, ListItemIcon, ListItemText } from '@mui/material';
 import SplitIcon from '@mui/icons-material/CallSplit';
 import EditIcon from '@mui/icons-material/Edit';
+import WarehouseIcon from '@mui/icons-material/Warehouse';
 import SplitDialog from './SplitDialog';
 import QuantityDialog from './QuantityDialog';
+import FulfilmentTypeDialog from './FulfilmentTypeDialog';
 
-const ContextMenu = ({ anchorPosition, isOpen, onClose, onSplitChange, onQuantityChange, currentItem }) => {
+const ContextMenu = ({ anchorPosition, isOpen, onClose, onSplitChange, onQuantityChange, onFulfilmentTypeChange, currentItem }) => {
   const [splitDialogOpen, setSplitDialogOpen] = useState(false);
   const [quantityDialogOpen, setQuantityDialogOpen] = useState(false);
+  const [fulfilmentTypeDialogOpen, setFulfilmentTypeDialogOpen] = useState(false);
 
   const handleSplitClick = () => {
     setSplitDialogOpen(true);
@@ -17,12 +20,20 @@ const ContextMenu = ({ anchorPosition, isOpen, onClose, onSplitChange, onQuantit
     setQuantityDialogOpen(true);
   };
 
+  const handleFulfilmentTypeClick = () => {
+    setFulfilmentTypeDialogOpen(true);
+  };
+
   const handleSplitDialogClose = () => {
     setSplitDialogOpen(false);
   };
 
   const handleQuantityDialogClose = () => {
     setQuantityDialogOpen(false);
+  };
+
+  const handleFulfilmentTypeDialogClose = () => {
+    setFulfilmentTypeDialogOpen(false);
   };
 
   const handleSplitSave = (updatedItem) => {
@@ -37,6 +48,12 @@ const ContextMenu = ({ anchorPosition, isOpen, onClose, onSplitChange, onQuantit
     onClose();
   };
 
+  const handleFulfilmentTypeSave = (updatedItem) => {
+    onFulfilmentTypeChange(updatedItem);
+    setFulfilmentTypeDialogOpen(false);
+    onClose();
+  };
+
   return (
     <>
       <Menu
@@ -46,7 +63,7 @@ const ContextMenu = ({ anchorPosition, isOpen, onClose, onSplitChange, onQuantit
         anchorPosition={anchorPosition}
         PaperProps={{
           elevation: 3,
-          sx: { 
+          sx: {
             minWidth: 200,
             borderRadius: '8px',
             '& .MuiMenuItem-root': {
@@ -67,6 +84,12 @@ const ContextMenu = ({ anchorPosition, isOpen, onClose, onSplitChange, onQuantit
           </ListItemIcon>
           <ListItemText primary="Change Quantity" />
         </MenuItem>
+        <MenuItem onClick={handleFulfilmentTypeClick}>
+          <ListItemIcon>
+            <WarehouseIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="Change Fulfilment Type" />
+        </MenuItem>
       </Menu>
 
       <SplitDialog
@@ -79,6 +102,12 @@ const ContextMenu = ({ anchorPosition, isOpen, onClose, onSplitChange, onQuantit
         open={quantityDialogOpen}
         onClose={handleQuantityDialogClose}
         onSave={handleQuantitySave}
+        currentItem={currentItem}
+      />
+      <FulfilmentTypeDialog
+        open={fulfilmentTypeDialogOpen}
+        onClose={handleFulfilmentTypeDialogClose}
+        onSave={handleFulfilmentTypeSave}
         currentItem={currentItem}
       />
     </>

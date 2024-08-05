@@ -10,14 +10,14 @@ import {
 } from '@mui/material';
 
 const SplitDialog = ({ open, onClose, onSave, currentItem }) => {
-  const [fbaSplit, setFbaSplit] = useState(currentItem?.['FBA Split'] ?? 0);
-  const [fbmSplit, setFbmSplit] = useState(currentItem?.['FBM Split'] ?? 0);
+  const [fbaSplit, setFbaSplit] = useState(currentItem?.['Initial Location Amazon'] ?? 0);
+  const [fbmSplit, setFbmSplit] = useState(currentItem?.['Initial Location Warehouse'] ?? 0);
   const [error, setError] = useState('');
   const quantity = currentItem?.['Quantity'] ?? 0;
 
   useEffect(() => {
-    setFbaSplit(currentItem?.['FBA Split'] ?? 0);
-    setFbmSplit(currentItem?.['FBM Split'] ?? 0);
+    setFbaSplit(currentItem?.['Initial Location Amazon'] ?? 0);
+    setFbmSplit(currentItem?.['Initial Location Warehouse'] ?? 0);
     setError('');
   }, [currentItem]);
 
@@ -51,8 +51,8 @@ const SplitDialog = ({ open, onClose, onSave, currentItem }) => {
 
     const updatedItem = {
       ...currentItem,
-      'FBA Split': parseInt(fbaSplit),
-      'FBM Split': parseInt(fbmSplit)
+      'Initial Location Amazon': parseInt(fbaSplit),
+      'Initial Location Warehouse': parseInt(fbmSplit)
     };
     onSave(updatedItem);
   };
@@ -62,7 +62,7 @@ const SplitDialog = ({ open, onClose, onSave, currentItem }) => {
       <DialogTitle>Change Split (Max: {quantity})</DialogTitle>
       <DialogContent>
         <TextField
-          label="FBA Split"
+          label="Initial Location Amazon"
           type="number"
           value={fbaSplit}
           onChange={handleSplitChange(setFbaSplit, fbmSplit)}
@@ -71,7 +71,7 @@ const SplitDialog = ({ open, onClose, onSave, currentItem }) => {
           inputProps={{ min: 0, step: 1, max: quantity }}
         />
         <TextField
-          label="FBM Split"
+          label="Initial Location Warehouse"
           type="number"
           value={fbmSplit}
           onChange={handleSplitChange(setFbmSplit, fbaSplit)}

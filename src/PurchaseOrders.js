@@ -20,7 +20,7 @@ import FilterControls from './FilterControls';
 import InvoiceDialog from './InvoiceDialog';
 
 const PurchaseOrders = () => {
-  const availableSalesChannels = ['Amazon FBA', 'Amazon FBM'];
+  const availableSalesChannels = ['Initial Location Amazon', 'Initial Location Warehouse'];
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [error, setError] = useState(null);
@@ -59,6 +59,22 @@ const PurchaseOrders = () => {
     return text || '';
   };
 
+  const handleAddItem = () => {
+    setPOData(prevData => ({
+      ...prevData,
+      items: [
+        ...prevData.items,
+        {
+          product_id: '',
+          quantity: 0,
+          unit_cost: 0,
+          extra_packing_needed: 'None',
+          sales_channel_split: availableSalesChannels.reduce((acc, channel) => ({...acc, [channel]: 0}), {})
+        }
+      ]
+    }));
+  };
+  
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters);
   };
@@ -188,6 +204,11 @@ const PurchaseOrders = () => {
       return;
     }
   
+    if (!checkQuantitySplitReconciliation(poData.items)) {
+      showSnackbar('The total quantity must match the sum of split quantities for each item.', 'error');
+      return;
+    }
+  
     try {
       const response = await api.post('/api/purchase_orders/create_po', {
         ...poData,
@@ -223,33 +244,21 @@ const PurchaseOrders = () => {
       showSnackbar('Expected delivery date cannot be in the past.', 'error');
       return;
     }
-
+  
     const areAllQuantitiesValid = poData.items.every((item) => {
-      const totalSplitQuantity = Object.values(item.sales_channel_split).reduce(
-        (sum, qty) => sum + qty,
-        0
-      );
-      return item.quantity >= totalSplitQuantity && item.quantity >= 0;
+      return item.quantity >= 0;
     });
-
+  
     if (!areAllQuantitiesValid) {
       showSnackbar('Ensure all quantities are valid and not negative.', 'error');
       return;
     }
-
-    const areAllSplitQuantitiesEqual = poData.items.every((item) => {
-      const totalSplitQuantity = Object.values(item.sales_channel_split).reduce(
-        (sum, qty) => sum + qty,
-        0
-      );
-      return totalSplitQuantity === item.quantity;
-    });
-
-    if (!areAllSplitQuantitiesEqual) {
-      showSnackbar('Total split quantities must equal the item quantity.', 'error');
+  
+    if (!checkQuantitySplitReconciliation(poData.items)) {
+      showSnackbar('The total quantity must match the sum of split quantities for each item.', 'error');
       return;
     }
-
+  
     try {
       const updatedPOData = {
         ...poData,
@@ -316,6 +325,12 @@ const PurchaseOrders = () => {
 
 
 
+  const checkQuantitySplitReconciliation = (items) => {
+    return items.every(item => {
+      const totalSplit = Object.values(item.sales_channel_split).reduce((sum, qty) => sum + qty, 0);
+      return item.quantity === totalSplit;
+    });
+  };
 
   const isPoEditable = (status) => {
     return status !== 'Checked';
@@ -585,7 +600,7 @@ const PurchaseOrders = () => {
                             <TableCell>Total Amount</TableCell>
                             <TableCell>Extra Packaging</TableCell>
                             {availableSalesChannels.map((channel) => (
-                              <TableCell key={channel}>{channel} Split</TableCell>
+                              <TableCell key={channel}>{channel}</TableCell>
                             ))}
                           </TableRow>
                         </TableHead>
@@ -630,148 +645,143 @@ const PurchaseOrders = () => {
 
         {/* Create/Edit PO Dialog */}
         <Dialog open={createEditPODialogOpen} onClose={handleCloseCreateEditPODialog} fullWidth maxWidth="xl">
-          <DialogTitle>{isEditingPO ? 'Edit Purchase Order' : 'Create Purchase Order'}</DialogTitle>
-          <DialogContent>
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, mb: 3 , mt :1 }}>
-              <FormControl sx={{ minWidth: 230}}>
-                <InputLabel>Supplier</InputLabel>
+  <DialogTitle>{isEditingPO ? 'Edit Purchase Order' : 'Create Purchase Order'}</DialogTitle>
+  <DialogContent>
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, mb: 3, mt: 1 }}>
+      <FormControl sx={{ minWidth: 230 }}>
+        <InputLabel>Supplier</InputLabel>
+        <Select
+          value={poData.supplier ? poData.supplier.id : ''}
+          onChange={(e) =>
+            setPOData({
+              ...poData,
+              supplier: suppliers.find((s) => s.id === e.target.value),
+            })
+          }
+          label="Supplier"
+        >
+          {suppliers.map((supplier) => (
+            <MenuItem key={supplier.id} value={supplier.id}>
+              {supplier.name}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+      <LocalizationProvider dateAdapter={AdapterDateFns}>
+        <DatePicker
+          label="Expected Delivery Date"
+          value={poData.expectedDeliveryDate}
+          onChange={(newValue) =>
+            setPOData({ ...poData, expectedDeliveryDate: newValue })
+          }
+          renderInput={(params) => <TextField {...params} sx={{ minWidth: 220 }} />}
+        />
+      </LocalizationProvider>
+    </Box>
+
+    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+      <Button
+        onClick={handleAddItem}
+        color="primary"
+        startIcon={<AddCircleOutlineIcon />}
+      >
+        Add Item
+      </Button>
+    </Box>
+
+    <TableContainer component={Paper}>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableCell>Product ID</TableCell>
+            <TableCell>Quantity</TableCell>
+            <TableCell>Unit Cost</TableCell>
+            <TableCell>Extra Packaging</TableCell>
+            <TableCell>Initial Location Amazon Split</TableCell>
+            <TableCell>Initial Location Warehouse Split</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {poData.items.map((item, index) => (
+            <TableRow key={index}>
+              <TableCell>
+                <TextField
+                  value={item.product_id}
+                  onChange={(e) => handleInputChange(index, 'product_id', e.target.value)}
+                  fullWidth
+                />
+              </TableCell>
+              <TableCell>
+                <TextField
+                  type="number"
+                  value={item.quantity}
+                  onChange={(e) => handleInputChange(index, 'quantity', parseInt(e.target.value, 10) || 0)}
+                  fullWidth
+                  InputProps={{ inputProps: { min: 0 } }}
+                />
+              </TableCell>
+              <TableCell>
+                <TextField
+                  type="number"
+                  value={item.unit_cost}
+                  onChange={(e) => handleInputChange(index, 'unit_cost', parseFloat(e.target.value) || 0)}
+                  fullWidth
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">£</InputAdornment>,
+                    inputProps: { min: 0, step: 0.01 }
+                  }}
+                />
+              </TableCell>
+              <TableCell>
                 <Select
-                  value={poData.supplier ? poData.supplier.id : ''}
-                  onChange={(e) =>
-                    setPOData({
-                      ...poData,
-                      supplier: suppliers.find((s) => s.id === e.target.value),
-                    })
-                  }
-                  label="Supplier"
+                  value={item.extra_packing_needed}
+                  onChange={(e) => handleInputChange(index, 'extra_packing_needed', e.target.value)}
+                  fullWidth
                 >
-                  {suppliers.map((supplier) => (
-                    <MenuItem key={supplier.id} value={supplier.id}>
-                      {supplier.name}
+                  {extraPackagingOptions.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
                     </MenuItem>
                   ))}
                 </Select>
-              </FormControl>
-              <LocalizationProvider dateAdapter={AdapterDateFns}>
-                <DatePicker
-                  label="Expected Delivery Date"
-                  value={poData.expectedDeliveryDate}
-                  onChange={(newValue) =>
-                    setPOData({ ...poData, expectedDeliveryDate: newValue })
-                  }
-                  renderInput={(params) => <TextField {...params} sx={{ minWidth: 220 }} />}
+              </TableCell>
+              <TableCell>
+                <TextField
+                  type="number"
+                  value={item.sales_channel_split['Initial Location Amazon'] || 0}
+                  onChange={(e) => handleSplitChange(index, 'Initial Location Amazon', parseInt(e.target.value, 10) || 0)}
+                  fullWidth
+                  InputProps={{ inputProps: { min: 0 } }}
                 />
-              </LocalizationProvider>
-            </Box>
-
-            <TableContainer component={Paper} style={{ marginTop: '1rem' }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Product ID</TableCell>
-                    <TableCell>Quantity</TableCell>
-                    <TableCell>Unit Cost</TableCell>
-                    <TableCell>Extra Packaging</TableCell>
-                    {availableSalesChannels.map((channel) => (
-                      <TableCell key={channel}>{channel} Split</TableCell>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {poData.items.map((item, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{item.product_id}</TableCell>
-                      <TableCell>
-                        <TextField
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) =>
-                            handleInputChange(
-                              index,
-                              'quantity',
-                              parseInt(e.target.value, 10) || 0
-                            )
-                          }
-                          fullWidth
-                          InputProps={{ inputProps: { min: 0 } }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          type="number"
-                          value={item.unit_cost}
-                          onChange={(e) =>
-                            handleInputChange(
-                              index,
-                              'unit_cost',
-                              parseFloat(e.target.value) || 0
-                            )
-                          }
-                          fullWidth
-                          InputProps={{
-                            startAdornment: (
-                              <InputAdornment position="start">£</InputAdornment>
-                            ),
-                            inputProps: { min: 0 }
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <FormControl fullWidth>
-                          <Select
-                            value={item.extra_packing_needed}
-                            onChange={(e) =>
-                              handleInputChange(
-                                index,
-                                'extra_packing_needed',
-                                e.target.value
-                              )
-                            }
-                          >
-                            {extraPackagingOptions.map((option) => (
-                              <MenuItem key={option.value} value={option.value}>
-                                {option.label}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                      </TableCell>
-                      {availableSalesChannels.map((channel) => (
-                        <TableCell key={channel}>
-                          <TextField
-                            type="number"
-                            value={item.sales_channel_split[channel] || 0}
-                            onChange={(e) =>
-                              handleSplitChange(
-                                index,
-                                channel,
-                                parseInt(e.target.value, 10) || 0
-                              )
-                            }
-                            fullWidth
-                            InputProps={{ inputProps: { min: 0 } }}
-                          />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseCreateEditPODialog}>Cancel</Button>
-            {isEditingPO ? (
-              <Button onClick={handleUpdatePurchaseOrder} color="primary">
-                Update PO
-              </Button>
-            ) : (
-              <Button onClick={handleCreatePurchaseOrder} color="primary">
-                Create PO
-              </Button>
-            )}
-          </DialogActions>
-        </Dialog>
+              </TableCell>
+              <TableCell>
+                <TextField
+                  type="number"
+                  value={item.sales_channel_split['Initial Location Warehouse'] || 0}
+                  onChange={(e) => handleSplitChange(index, 'Initial Location Warehouse', parseInt(e.target.value, 10) || 0)}
+                  fullWidth
+                  InputProps={{ inputProps: { min: 0 } }}
+                />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  </DialogContent>
+  <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
+    <Button onClick={handleCloseCreateEditPODialog} color="primary">
+      Cancel
+    </Button>
+    <Button
+      onClick={isEditingPO ? handleUpdatePurchaseOrder : handleCreatePurchaseOrder}
+      color="primary"
+      variant="contained"
+    >
+      {isEditingPO ? 'Update PO' : 'Create PO'}
+    </Button>
+  </DialogActions>
+</Dialog>
           </ResultsContainer>
         </ContentContainer>
       </PageContainer>

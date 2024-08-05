@@ -123,16 +123,16 @@ const ToProcureTable = ({ data, setData, onSaveSelected, fetchToProcureItems }) 
   const handleCreatePO = () => {
     if (contextMenu) {
       const selectedItem = editedData[contextMenu.product.ID];
-      const fbaSplit = parseInt(selectedItem['FBA Split']) || 0;
-      const fbmSplit = parseInt(selectedItem['FBM Split']) || 0;
+      const fbaSplit = parseInt(selectedItem['Initial Location Amazon']) || 0;
+      const fbmSplit = parseInt(selectedItem['Initial Location Warehouse']) || 0;
       const totalQuantity = fbaSplit + fbmSplit;
   
       const newPoDetails = [{
         ...selectedItem,
         totalQuantity: totalQuantity,
         splits: [
-          { id: 1, channel: 'Amazon FBA', quantity: fbaSplit },
-          { id: 2, channel: 'Amazon FBM', quantity: fbmSplit }
+          { id: 1, channel: 'Initial Location Amazon', quantity: fbaSplit },
+          { id: 2, channel: 'Initial Location Warehouse', quantity: fbmSplit }
         ].filter(split => split.quantity > 0)
       }];
       setPoDetails(newPoDetails);
@@ -227,8 +227,9 @@ const ToProcureTable = ({ data, setData, onSaveSelected, fetchToProcureItems }) 
     { field: 'Margin FBM', headerName: 'Margin FBM' },
     { field: 'Net Profit FBA', headerName: 'Net Profit FBA' },
     { field: 'Net Profit FBM', headerName: 'Net Profit FBM' },
-    { field: 'FBA Split', headerName: 'FBA Split' },
-    { field: 'FBM Split', headerName: 'FBM Split' },
+    { field: 'Fulfilment Type', headerName: 'Fulfilment Type' },
+    { field: 'Initial Location Amazon', headerName: 'Initial Location Amazon' },
+    { field: 'Initial Location Warehouse', headerName: 'Initial Location Warehouse' },
     { field: 'Approved By', headerName: 'Approved By' },
     { field: 'Approved At', headerName: 'Approved At' },
   ], []);
@@ -271,10 +272,10 @@ const ToProcureTable = ({ data, setData, onSaveSelected, fetchToProcureItems }) 
 
   const getHighlightedColumns = (item) => {
     const columns = [];
-    if (item['FBA Split'] > 0) {
+    if (item['Fulfilment Type'] === 'FBA') {
       columns.push('Sell Price FBA', 'Margin FBA', 'Net Profit FBA');
     }
-    if (item['FBM Split'] > 0) {
+    if (item['Fulfilment Type'] === 'FBM') {
       columns.push('Sell Price FBM', 'Margin FBM', 'Net Profit FBM');
     }
     return columns;
@@ -463,7 +464,7 @@ const ToProcureTable = ({ data, setData, onSaveSelected, fetchToProcureItems }) 
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Channel</TableCell>
+              <TableCell>Split</TableCell>
               <TableCell align="right">Quantity</TableCell>
             </TableRow>
           </TableHead>

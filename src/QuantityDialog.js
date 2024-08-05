@@ -23,8 +23,8 @@ const QuantityDialog = ({ open, onClose, onSave, currentItem }) => {
     const updatedItem = {
       ...currentItem,
       Quantity: newQuantity,
-      'FBA Split': Math.round(currentItem['FBA Split'] * ratio),
-      'FBM Split': Math.round(currentItem['FBM Split'] * ratio),
+      'Initial Location Amazon': Math.round(currentItem['Initial Location Amazon'] * ratio),
+      'Initial Location Warehouse': Math.round(currentItem['Initial Location Warehouse'] * ratio),
     };
 
     onSave(updatedItem);

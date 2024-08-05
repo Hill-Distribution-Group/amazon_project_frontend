@@ -28,6 +28,7 @@ const ResultTable = ({
   onSplitUpdate,  
   onQuantityUpdate,
   onCommentUpdate, 
+  onFulfilmentTypeUpdate,
   users, 
   assignees, 
   onAssigneeChange,
@@ -76,8 +77,8 @@ const ResultTable = ({
     if (selectedRowIndex !== null) {
       const updatedItem = { 
         ...data[selectedRowIndex], 
-        'FBA Split': newSplit['FBA Split'], 
-        'FBM Split': newSplit['FBM Split'] 
+        'Initial Location Amazon': newSplit['Initial Location Amazon'], 
+        'Initial Location Warehouse': newSplit['Initial Location Warehouse'] 
       };
       console.log('Updating split in ResultTable:', updatedItem);
       await onSplitUpdate(updatedItem);
@@ -87,6 +88,15 @@ const ResultTable = ({
   const handleQuantityChange = async (updatedItem) => {
     if (onQuantityUpdate) {
       await onQuantityUpdate(updatedItem);
+    }
+    setData(prevData => prevData.map(item =>
+      item.ID === updatedItem.ID ? updatedItem : item
+    ));
+  };
+
+  const handleFulfilmentTypeChange = async (updatedItem) => {
+    if (onFulfilmentTypeUpdate) {
+      await onFulfilmentTypeUpdate(updatedItem);
     }
     setData(prevData => prevData.map(item =>
       item.ID === updatedItem.ID ? updatedItem : item
@@ -198,8 +208,9 @@ const ResultTable = ({
       { field: "Expected Total Net Profit FBA", headerName: "Exp. Profit FBA" },
       { field: "Expected Total Net Profit FBM", headerName: "Exp. Profit FBM" },
       { field: "Is Sold by Amazon", headerName: "Sold by Amazon" },
-      { field: "FBA Split", headerName: "FBA Split" },
-      { field: "FBM Split", headerName: "FBM Split" },
+      { field: "Fulfilment Type", headerName: "Fulfilment Type" },
+      { field: "Initial Location Amazon", headerName: "Initial Location Amazon" },
+      { field: "Initial Location Warehouse", headerName: "Initial Location Warehouse" },
       { field: "Comment", headerName: "Comment" }
     ];
 
@@ -305,7 +316,16 @@ const ResultTable = ({
       );
     } else if (column.field === "Is Sold by Amazon") {
       return <span>{value}</span>;
-    } else {
+      
+    }
+    else if (column.field === 'Fulfilment Type') {
+      return (
+        <span style={{ color: value === 'FBA' || value === 'FBM' ? 'green' : 'red' }}>
+          {formatValue(value)}
+        </span>
+      );
+  }
+   else {
       return formatValue(value);
     }
   };
@@ -511,6 +531,7 @@ const ResultTable = ({
         onClose={handleCloseContextMenu}
         onSplitChange={handleSplitChange}
         onQuantityChange={handleQuantityChange}
+        onFulfilmentTypeChange={handleFulfilmentTypeChange} // Pass the handler
         currentItem={selectedItem}
       />
 

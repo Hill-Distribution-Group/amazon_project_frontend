@@ -140,13 +140,13 @@ const ToApprove = () => {
     try {
       await api.post('/api/saved_results/update_split', {
         ID: updatedItem.ID,
-        FBA_Split: updatedItem['FBA Split'],
-        FBM_Split: updatedItem['FBM Split'],
+        Initial_Location_Amazon: updatedItem['Initial Location Amazon'],
+        Initial_Location_Warehouse: updatedItem['Initial Location Warehouse'],
       });
       setSavedItems(prevItems => 
         prevItems.map(item => 
           item.ID === updatedItem.ID 
-            ? { ...item, 'FBA Split': updatedItem['FBA Split'], 'FBM Split': updatedItem['FBM Split'] } 
+            ? { ...item, 'Initial Location Amazon': updatedItem['Initial Location Amazon'], 'Initial Location Warehouse': updatedItem['Initial Location Warehouse'] } 
             : item
         )
       );
@@ -163,13 +163,13 @@ const ToApprove = () => {
       await api.post('/api/saved_results/update_quantity', {
         ID: updatedItem.ID,
         Quantity: updatedItem.Quantity,
-        FBA_Split: updatedItem['FBA Split'],
-        FBM_Split: updatedItem['FBM Split'],
+        Initial_Location_Amazon: updatedItem['Initial Location Amazon'],
+        Initial_Location_Warehouse: updatedItem['Initial Location Warehouse'],
       });
       setSavedItems(prevItems => 
         prevItems.map(item => 
           item.ID === updatedItem.ID 
-            ? { ...item, Quantity: updatedItem.Quantity, 'FBA Split': updatedItem['FBA Split'], 'FBM Split': updatedItem['FBM Split'] } 
+            ? { ...item, Quantity: updatedItem.Quantity, 'Initial Location Amazon': updatedItem['Initial Location Amazon'], 'Initial Location Warehouse': updatedItem['Initial Location Warehouse'] } 
             : item
         )
       );
@@ -177,6 +177,26 @@ const ToApprove = () => {
     } catch (error) {
       console.error('Error updating quantity and split:', error);
       showSnackbar('Error updating quantity and split. Please try again.', 'error');
+    }
+  };
+
+  const handleFulfilmentTypeUpdate = async (updatedItem) => {
+    try {
+      await api.post('/api/saved_results/update_fulfilment_type', {
+        ID: updatedItem.ID,
+        'Fulfilment Type': updatedItem['Fulfilment Type'],
+      });
+      setSavedItems(prevItems => 
+        prevItems.map(item => 
+          item.ID === updatedItem.ID 
+            ? { ...item, 'Fulfilment Type': updatedItem['Fulfilment Type'] } 
+            : item
+        )
+      );
+      showSnackbar('Fulfilment type updated successfully', 'success');
+    } catch (error) {
+      console.error('Error updating fulfilment type:', error);
+      showSnackbar('Failed to update fulfilment type', 'error');
     }
   };
 
@@ -219,6 +239,7 @@ const ToApprove = () => {
                   onAssigneeChange={handleAssigneeChange}
                   multipleAssignees={true}
                   onRejectSelected={handleRejectSelected}
+                  onFulfilmentTypeUpdate={handleFulfilmentTypeUpdate}
                 />
             ) : (
               <Typography variant="body1">No pending items found.</Typography>

@@ -248,20 +248,34 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
   const pollProcessingStatus = useCallback(async () => {
     try {
       const response = await api.get('/api/procurement_board/process_status');
-      const { status } = response.data;
-
+      const { status, error } = response.data;
+  
       if (status === 'completed') {
         const resultResponse = await api.get('/api/procurement_board/get_result');
         setResults(Array.isArray(resultResponse.data) ? resultResponse.data : [resultResponse.data]);
         showSnackbar('Processing completed successfully', 'success');
         setLocalLoading(false);
         setLoading(false);
-        resetInputValues(); // Reset input values after processing is complete
-      } else if (status === 'stopped' || status === 'error') {
-        addLog(`Process ${status}`, 'error');
+        resetInputValues();
+      } else if (status === 'stopped') {
+        addLog(`Process stopped`, 'warning');
         setLocalLoading(false);
         setLoading(false);
-      } else {
+      } else if (status === 'error') {
+        if (error) {
+          addLog(`Process error: ${error}`, 'error');
+        } else {
+          addLog(`Process encountered an error`, 'error');
+        }
+        setLocalLoading(false);
+        setLoading(false);
+      } else if (status === 'no_results') {
+        // Handle the no results case without showing any additional messages
+        setLocalLoading(false);
+        setLoading(false);
+        resetInputValues();
+        setResults([]);
+      } else if (status === 'processing') {
         setTimeout(pollProcessingStatus, 2000);
       }
     } catch (error) {
@@ -291,6 +305,7 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
       setLoading(true);
       setLogs([]);
       setResults([]);
+      setResultTabValue(0);
       cancelTokenSource.current = api.CancelToken.source();
 
       let response;

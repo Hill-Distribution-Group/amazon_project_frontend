@@ -71,7 +71,8 @@ const Header = ({ isLoggedIn, onLogout }) => {
       { label: 'Reorder Points', path: '/reorder-points' },
       { label: 'Bulk Orders', path: '/bulk-orders' },
       { label: 'Price Negotiations', path: '/price-negotiations' },
-    ],
+      { label: 'Invoice & Payment Management', path: '/invoice-payment'},
+       ],
     sales: [
       { label: 'Order Management', path: '/order-management' },
       { label: 'Amazon', path: '/amazon-sales' },

@@ -326,10 +326,20 @@ const PurchaseOrders = () => {
 
 
   const checkQuantitySplitReconciliation = (items) => {
-    return items.every(item => {
+    const mismatchedItems = items.filter(item => {
       const totalSplit = Object.values(item.sales_channel_split).reduce((sum, qty) => sum + qty, 0);
-      return item.quantity === totalSplit;
+      return item.quantity !== totalSplit;
     });
+  
+    if (mismatchedItems.length > 0) {
+      const itemDescriptions = mismatchedItems.map(item => 
+        `Product ID ${item.product_id}: Total ${item.quantity}, Split sum ${Object.values(item.sales_channel_split).reduce((sum, qty) => sum + qty, 0)}`
+      ).join('; ');
+      showSnackbar(`Quantity mismatch for items: ${itemDescriptions}`, 'error');
+      return false;
+    }
+  
+    return true;
   };
 
   const isPoEditable = (status) => {

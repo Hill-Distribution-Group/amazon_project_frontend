@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Dialog, 
-  DialogTitle, 
-  DialogContent, 
-  DialogActions, 
-  TextField, 
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
   Button,
   Typography
 } from '@mui/material';
@@ -21,15 +21,15 @@ const SplitDialog = ({ open, onClose, onSave, currentItem }) => {
     setError('');
   }, [currentItem]);
 
-  const handleSplitChange = (setValue, otherValue) => (event) => {
+  const handleSplitChange = (setValue, otherSetter) => (event) => {
     const value = event.target.value;
     if (value === '' || (Number.isInteger(Number(value)) && Number(value) >= 0)) {
       const newValue = Number(value);
-      const otherSplitValue = Number(otherValue);
-      if (newValue + otherSplitValue > quantity) {
-        setError(`Total split cannot exceed ${quantity}`);
+      if (newValue > quantity) {
+        setError(`Value cannot exceed ${quantity}`);
       } else {
         setValue(newValue);
+        otherSetter(quantity - newValue);
         setError('');
       }
     } else {
@@ -44,8 +44,8 @@ const SplitDialog = ({ open, onClose, onSave, currentItem }) => {
     }
 
     const totalSplit = Number(fbaSplit) + Number(fbmSplit);
-    if (totalSplit > quantity) {
-      setError(`Total split (${totalSplit}) cannot exceed ${quantity}`);
+    if (totalSplit !== quantity) {
+      setError(`Total split (${totalSplit}) must equal ${quantity}`);
       return;
     }
 
@@ -59,13 +59,13 @@ const SplitDialog = ({ open, onClose, onSave, currentItem }) => {
 
   return (
     <Dialog open={open} onClose={onClose}>
-      <DialogTitle>Change Split (Max: {quantity})</DialogTitle>
+      <DialogTitle>Change Split (Total: {quantity})</DialogTitle>
       <DialogContent>
         <TextField
           label="Initial Location Amazon"
           type="number"
           value={fbaSplit}
-          onChange={handleSplitChange(setFbaSplit, fbmSplit)}
+          onChange={handleSplitChange(setFbaSplit, setFbmSplit)}
           fullWidth
           margin="normal"
           inputProps={{ min: 0, step: 1, max: quantity }}
@@ -74,13 +74,13 @@ const SplitDialog = ({ open, onClose, onSave, currentItem }) => {
           label="Initial Location Warehouse"
           type="number"
           value={fbmSplit}
-          onChange={handleSplitChange(setFbmSplit, fbaSplit)}
+          onChange={handleSplitChange(setFbmSplit, setFbaSplit)}
           fullWidth
           margin="normal"
           inputProps={{ min: 0, step: 1, max: quantity }}
         />
         <Typography variant="body2" style={{ marginTop: 8 }}>
-          Remaining: {Math.max(0, quantity - Number(fbaSplit) - Number(fbmSplit))}
+          Total: {Number(fbaSplit) + Number(fbmSplit)} / {quantity}
         </Typography>
         {error && (
           <Typography color="error" variant="body2" style={{ marginTop: 8 }}>
@@ -90,7 +90,7 @@ const SplitDialog = ({ open, onClose, onSave, currentItem }) => {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleSave} color="primary" disabled={!!error}>
+        <Button onClick={handleSave} color="primary" disabled={!!error || (Number(fbaSplit) + Number(fbmSplit) !== quantity)}>
           Save
         </Button>
       </DialogActions>

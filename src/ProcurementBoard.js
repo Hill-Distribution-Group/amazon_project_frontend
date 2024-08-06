@@ -174,6 +174,14 @@ const ProcurementBoard = ({ isLoggedIn, checkLoginStatus }) => {
   // Data Handling Functions
   const handleSaveSelected = async (selectedItems) => {
     try {
+      // Check for items with zero quantity
+      const itemsWithZeroQuantity = selectedItems.filter(item => item.Quantity <= 0);
+      if (itemsWithZeroQuantity.length > 0) {
+        const itemList = itemsWithZeroQuantity.map(item => item.ID).join(', ');
+        showSnackbar(`Items with IDs ${itemList} have zero or negative quantity. Please update before sending for approval.`, 'error');
+        return { success: false, message: 'Some items have invalid quantity' };
+      }
+  
       const response = await api.post('/api/procurement_board/save_flagged', { items: selectedItems });
       if (response.data) {
         const { message, warnings, items_with_restrictions } = response.data;
